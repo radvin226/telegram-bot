@@ -640,7 +640,6 @@ def activate_bot(message):
             rank = get_user_rank(message.chat.id, message.from_user.id)
         send_msg(message.chat.id,
             f"✅ <b>ربات فعال شد!</b>\n\n"
-            f"👨‍💻 <b>ساخته شده برای گپ پدرام</b>\n\n"
             f"👤 <b>مالک:</b> {message.from_user.first_name}\n"
             f"🆔 <b>آیدی:</b> <code>{message.from_user.id}</code>\n\n"
             f"🎯 از منوی زیر استفاده کنید:",
