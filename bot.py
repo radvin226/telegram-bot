@@ -21,10 +21,8 @@ from datetime import datetime, timedelta
 # ==============================================================================
 
 # دریافت توکن از متغیرهای محیطی Railway
-TOKEN = os.getenv('BOT_TOKEN')
-if not TOKEN:
-    raise Exception("⛔ خطای بحرانی: متغیر BOT_TOKEN در Railway تنظیم نشده است!")
-
+TOKEN = '8835162507:AAEJmL2oFnM-PIjhT0aMBpimK2WMVJ2hf9E'
+   
 # آیدی عددی توسعه‌دهنده اصلی (رادوین) - دسترسی کامل سودو
 ADMIN_IDS = [6420547446]
 DATABASE_FILE = 'database.json'
