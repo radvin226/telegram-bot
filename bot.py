@@ -8,7 +8,7 @@ from google import genai
 # ========== تنظیمات از متغیرهای محیطی ==========
 API_ID = 2040
 API_HASH = "b18441a1ff607e10a989891a5462e627"
-BOT_TOKEN = os.environ.get("8923520269:AAGnYoOz0rIibUa8p-hqGGZlM2dse6YU8uo")
+BOT_TOKEN = os.environ.get("8923520269:AAHr8sbONDd0htlst-1f91oaJLWm0N4BXOQ")
 AI_API_KEY = os.environ.get("AQ.Ab8RN6KNcpLEzX1iThuvuyhHfcMO7zQsEHoe5EFTrxas3TQ26g")
 MY_CHAT_ID = int(os.environ.get("MY_CHAT_ID", "0"))
 CANCEL_KEYWORD = "زرنزن"
