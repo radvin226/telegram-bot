@@ -10,7 +10,7 @@ API_ID = 2040
 API_HASH = "b18441a1ff607e10a989891a5462e627"
 BOT_TOKEN = "8923520269:AAGnYoOz0rIibUa8p-hqGGZlM2dse6YU8uo"      # ⚠️ حتماً عوض کنید
 AI_API_KEY = "AQ.Ab8RN6JlTmIgo2aTxAfdIRTdRCUq4mJuO6DPFbEpu5N7LHqzMg"         # ⚠️ حتماً عوض کنید
-MY_CHAT_ID = 123456789                        # ⚠️ آیدی واقعی خودتان را بگذارید
+MY_CHAT_ID = 6420547446                        # ⚠️ آیدی واقعی خودتان را بگذارید
 CANCEL_KEYWORD = "زرنزن"
 
 SYSTEM_PROMPT = """تو یک دستیار صمیمی فارسی‌زبان هستی.
