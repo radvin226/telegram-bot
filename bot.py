@@ -16,7 +16,7 @@ import time
 
 BOT_TOKEN = "8956404018:AAHdIV2Jhv9FOK9Xs9qqwxsX-AKofRt-fb4" 
 
-HF_TOKEN = "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"
+HF_TOKEN = "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"
 
 OWNER_ID = 6420547446
 
