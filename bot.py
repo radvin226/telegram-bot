@@ -1,32 +1,56 @@
 # ==========================================
 # Sigma AI Telegram Bot
-# HuggingFace + Inline Keyboard + Railway
+# Railway Secure Version
+# HuggingFace + Inline Keyboard
 # ==========================================
 
+import os
+import time
+import sqlite3
 import telebot
+
 from telebot import types
 from huggingface_hub import InferenceClient
-import sqlite3
-import time
 
 
 # ==========================
 # CONFIG
 # ==========================
 
-BOT_TOKEN = "8956404018:AAHdIV2Jhv9FOK9Xs9qqwxsX-AKofRt-fb4" 
+BOT_TOKEN = os.getenv("BOT_TOKEN")
+HF_TOKEN = os.getenv("HF_TOKEN")
 
-HF_TOKEN = "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"
+OWNER_ID = int(
+    os.getenv(
+        "OWNER_ID",
+        "0"
+    )
+)
 
-OWNER_ID = 6420547446
+CHANNEL = os.getenv(
+    "CHANNEL",
+    ""
+)
 
-CHANNEL = "@hvxxxklllll"
+
+if not BOT_TOKEN:
+    raise Exception(
+        "BOT_TOKEN missing"
+    )
+
+
+if not HF_TOKEN:
+    raise Exception(
+        "HF_TOKEN missing"
+    )
+
 
 
 bot = telebot.TeleBot(
     BOT_TOKEN,
     parse_mode="HTML"
 )
+
 
 
 # ==========================
@@ -80,10 +104,10 @@ PERSONALITIES = {
 "مثل یک دوست صمیمی مهربان صحبت کن",
 
 "استاد":
-"مثل یک استاد حرفه‌ای آموزش بده",
+"مثل یک استاد حرفه‌ای توضیح بده",
 
 "برنامه نویس":
-"مثل یک متخصص برنامه نویسی جواب بده",
+"مثل متخصص برنامه نویسی جواب بده",
 
 "شوخ":
 "شوخ و سرگرم کننده باش"
@@ -93,7 +117,7 @@ PERSONALITIES = {
 
 
 # ==========================
-# USER FUNCTIONS
+# USER
 # ==========================
 
 
@@ -161,17 +185,14 @@ def save_history(uid,text):
             uid
         )
     )
-    
-
-    db.commit()
-    # ==========================================
+# ==========================================
 # INLINE KEYBOARDS
 # ==========================================
 
 
 def main_menu():
 
-    kb = types.InlineKeyboardMarkup()
+    kb = types.InlineKeyboardMarkup(row_width=2)
 
     kb.add(
         types.InlineKeyboardButton(
@@ -184,12 +205,9 @@ def main_menu():
         types.InlineKeyboardButton(
             "🎭 تغییر شخصیت",
             callback_data="personality"
-        )
-    )
-
-    kb.add(
+        ),
         types.InlineKeyboardButton(
-            "📚 لیست شخصیت ها",
+            "📚 شخصیت‌ها",
             callback_data="list"
         )
     )
@@ -207,7 +225,9 @@ def main_menu():
 
 def personality_menu():
 
-    kb = types.InlineKeyboardMarkup()
+    kb = types.InlineKeyboardMarkup(
+        row_width=2
+    )
 
     for name in PERSONALITIES:
 
@@ -234,7 +254,9 @@ def personality_menu():
 # ==========================================
 
 
-@bot.message_handler(commands=["start"])
+@bot.message_handler(
+    commands=["start"]
+)
 def start(message):
 
     uid = message.from_user.id
@@ -245,13 +267,13 @@ def start(message):
     bot.reply_to(
         message,
         """
-🔥 <b>Sigma AI فعال شد</b>
+🔥 <b>Sigma AI روشن شد</b>
 
 سلام 👋
 
-من یک هوش مصنوعی با چند شخصیت هستم.
+من یک دستیار هوش مصنوعی با چند شخصیت هستم.
 
-از منو انتخاب کن:
+یکی را انتخاب کن:
         """,
         reply_markup=main_menu()
     )
@@ -259,7 +281,7 @@ def start(message):
 
 
 # ==========================================
-# CALLBACK BUTTONS
+# BUTTON HANDLER
 # ==========================================
 
 
@@ -273,34 +295,38 @@ def buttons(call):
 
     if call.data == "chat":
 
-        bot.answer_callback_query(call.id)
+        bot.answer_callback_query(
+            call.id
+        )
 
         bot.send_message(
             uid,
-            "💬 پیام خودت را بفرست..."
+            "💬 پیام خودت را ارسال کن:"
         )
 
 
     elif call.data == "personality":
 
         bot.edit_message_text(
-            "🎭 یک شخصیت انتخاب کن:",
+            "🎭 شخصیت را انتخاب کن:",
             uid,
             call.message.message_id,
             reply_markup=personality_menu()
         )
 
 
+
     elif call.data == "list":
 
-        txt="🎭 شخصیت ها:\n\n"
+        text = "🎭 لیست شخصیت‌ها:\n\n"
 
         for p in PERSONALITIES:
-            txt += "• "+p+"\n"
+
+            text += "• "+p+"\n"
 
 
         bot.edit_message_text(
-            txt,
+            text,
             uid,
             call.message.message_id,
             reply_markup=main_menu()
@@ -316,6 +342,9 @@ def buttons(call):
         )
 
 
+        create_user(uid)
+
+
         set_personality(
             uid,
             name
@@ -323,7 +352,7 @@ def buttons(call):
 
 
         bot.edit_message_text(
-            f"✅ شخصیت تغییر کرد به:\n<b>{name}</b>",
+            f"✅ شخصیت شد:\n<b>{name}</b>",
             uid,
             call.message.message_id,
             reply_markup=main_menu()
@@ -349,12 +378,13 @@ def buttons(call):
 )
 def chat(message):
 
-    # دستورات را رد کن
+    # رد کردن دستورات
     if message.text.startswith("/"):
         return
 
 
     uid = message.from_user.id
+
 
     create_user(uid)
 
@@ -369,18 +399,14 @@ def chat(message):
 
 
     prompt = f"""
-تو یک هوش مصنوعی هستی.
-
 شخصیت:
 {PERSONALITIES.get(personality)}
 
-تاریخچه گفتگو:
+تاریخچه:
 {history}
-
 
 کاربر:
 {message.text}
-
 
 پاسخ:
 """
@@ -395,13 +421,14 @@ def chat(message):
         )
 
 
-        response = ai.chat_completion(
+        result = ai.chat_completion(
 
             model=MODEL,
 
             messages=[
+
                 {
-                    "role":"system",
+                    "role": "system",
                     "content":
                     PERSONALITIES.get(
                         personality
@@ -409,17 +436,21 @@ def chat(message):
                 },
 
                 {
-                    "role":"user",
-                    "content":prompt
+                    "role": "user",
+                    "content": prompt
                 }
+
             ],
 
-            max_tokens=500
+            max_tokens=500,
+
+            temperature=0.7
         )
 
 
+
         answer = (
-            response
+            result
             .choices[0]
             .message
             .content
@@ -429,15 +460,17 @@ def chat(message):
 
     except Exception as e:
 
+
         print(
             "AI ERROR:",
-            e
+            repr(e)
         )
 
-        answer = """
-❌ خطا در ارتباط با هوش مصنوعی
 
-لطفاً دوباره تلاش کن.
+        answer = """
+❌ خطا در اتصال به هوش مصنوعی
+
+لطفاً دوباره امتحان کن.
 """
 
 
@@ -446,7 +479,7 @@ def chat(message):
         uid,
         history
         +
-        "\nکاربر:"
+        "\nUSER:"
         +
         message.text
         +
@@ -464,8 +497,10 @@ def chat(message):
 
 
 
+
+
 # ==========================================
-# COMMAND LIST
+# COMMANDS
 # ==========================================
 
 
@@ -476,7 +511,7 @@ def menu(message):
 
     bot.send_message(
         message.chat.id,
-        "🔥 منوی اصلی:",
+        "🔥 منوی اصلی",
         reply_markup=main_menu()
     )
 
@@ -485,17 +520,19 @@ def menu(message):
 @bot.message_handler(
     commands=["list"]
 )
-def list_command(message):
+def list_cmd(message):
 
-    txt="🎭 شخصیت ها:\n\n"
+    text = "🎭 شخصیت‌ها:\n\n"
+
 
     for p in PERSONALITIES:
-        txt += "• "+p+"\n"
+
+        text += "• " + p + "\n"
 
 
     bot.reply_to(
         message,
-        txt
+        text
     )
     # ==========================================
 # ADMIN PANEL
@@ -504,7 +541,9 @@ def list_command(message):
 
 def admin_menu():
 
-    kb = types.InlineKeyboardMarkup()
+    kb = types.InlineKeyboardMarkup(
+        row_width=2
+    )
 
 
     kb.add(
@@ -553,15 +592,17 @@ def admin(message):
 
     bot.send_message(
         message.chat.id,
-        "👑 پنل مدیریت",
+        "👑 <b>پنل مدیریت</b>",
         reply_markup=admin_menu()
     )
 
 
 
 
-# اضافه کردن دکمه های ادمین
-old_buttons = buttons
+
+# ==========================================
+# ADMIN BUTTONS
+# ==========================================
 
 
 @bot.callback_query_handler(
@@ -573,7 +614,9 @@ old_buttons = buttons
 )
 def admin_buttons(call):
 
+
     uid = call.from_user.id
+
 
 
     if uid != OWNER_ID:
@@ -587,20 +630,17 @@ def admin_buttons(call):
 
 
 
+
     if call.data == "admin":
 
 
         bot.edit_message_text(
-
             "👑 پنل مدیریت",
-
             uid,
-
             call.message.message_id,
-
             reply_markup=admin_menu()
-
         )
+
 
 
 
@@ -615,15 +655,11 @@ def admin_buttons(call):
         count = cur.fetchone()[0]
 
 
-        bot.answer_callback_query(
-            call.id
-        )
-
-
         bot.send_message(
             uid,
-            f"👥 کاربران: {count}"
+            f"👥 تعداد کاربران: {count}"
         )
+
 
 
 
@@ -632,26 +668,30 @@ def admin_buttons(call):
 
         bot.send_message(
             uid,
-            "📢 متن پیام همگانی را ارسال کن:"
+            "📢 متن پیام را بفرست:"
         )
 
 
         bot.register_next_step_handler(
             call.message,
-            broadcast_send
+            broadcast
         )
 
 
 
 
 
-def broadcast_send(message):
+def broadcast(message):
+
 
     if message.from_user.id != OWNER_ID:
+
         return
 
 
+
     text = message.text
+
 
 
     cur.execute(
@@ -665,12 +705,13 @@ def broadcast_send(message):
     sent = 0
 
 
-    for u in users:
+
+    for user in users:
 
         try:
 
             bot.send_message(
-                u[0],
+                user[0],
                 text
             )
 
@@ -685,7 +726,7 @@ def broadcast_send(message):
 
     bot.reply_to(
         message,
-        f"✅ ارسال شد: {sent}"
+        f"✅ ارسال شد برای {sent} نفر"
     )
 
 
@@ -708,6 +749,7 @@ while True:
     try:
 
         bot.infinity_polling(
+            skip_pending=True,
             timeout=60,
             long_polling_timeout=60
         )
@@ -721,3 +763,4 @@ while True:
         )
 
         time.sleep(10)
+    db.commit()
