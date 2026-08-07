@@ -43,8 +43,8 @@ genai.configure(
 )
 
 
-ai = genai.GenerativeModel(
-    "gemini-2.0-flash"
+model = genai.GenerativeModel(
+    "gemini-1.5-flash"
 )
 
 
@@ -54,14 +54,14 @@ ai = genai.GenerativeModel(
 # ==========================
 
 db = sqlite3.connect(
-    "users.db",
+    "sigma.db",
     check_same_thread=False
 )
 
-cur = db.cursor()
+cursor = db.cursor()
 
 
-cur.execute("""
+cursor.execute("""
 CREATE TABLE IF NOT EXISTS users(
 id INTEGER PRIMARY KEY,
 personality TEXT,
@@ -69,41 +69,31 @@ history TEXT
 )
 """)
 
-
 db.commit()
 
 
 
 # ==========================
-# شخصیت ها
+# Personalities
 # ==========================
+
 
 PERSONALITIES = {
 
 "سیگما":
-"""
-آرام، با اعتماد به نفس، باهوش و کمی مرموز صحبت کن.
-""",
+"آرام، با اعتماد به نفس، مرموز و کوتاه جواب بده.",
 
 "دوست":
-"""
-مثل یک دوست صمیمی و مهربان صحبت کن.
-""",
+"مثل دوست صمیمی مهربان صحبت کن.",
 
 "استاد":
-"""
-مثل یک استاد حرفه ای و دقیق توضیح بده.
-""",
+"مثل استاد حرفه ای و آموزشی جواب بده.",
 
 "هکر":
-"""
-مثل متخصص برنامه نویسی و تکنولوژی جواب بده.
-""",
+"مثل متخصص تکنولوژی و برنامه نویسی جواب بده.",
 
 "شوخ":
-"""
-شوخ و سرگرم کننده باش.
-"""
+"شوخ و سرگرم کننده باش."
 
 }
 
@@ -113,9 +103,9 @@ for i in range(1,101):
 
     PERSONALITIES[
         f"شخصیت {i}"
-    ] = f"""
-تو شخصیت شماره {i} هستی.
-"""
+    ] = f"تو شخصیت شماره {i} هستی."
+
+
 
 
 # ==========================
@@ -125,16 +115,17 @@ for i in range(1,101):
 
 def create_user(uid):
 
-    cur.execute(
-    """
-    INSERT OR IGNORE INTO users
-    VALUES(?,?,?)
-    """,
-    (
-        uid,
-        "سیگما",
-        ""
-    ))
+    cursor.execute(
+        """
+        INSERT OR IGNORE INTO users
+        VALUES(?,?,?)
+        """,
+        (
+            uid,
+            "سیگما",
+            ""
+        )
+    )
 
     db.commit()
 
@@ -142,72 +133,121 @@ def create_user(uid):
 
 def get_user(uid):
 
-    cur.execute(
-    """
-    SELECT *
-    FROM users
-    WHERE id=?
-    """,
-    (uid,)
+    cursor.execute(
+        """
+        SELECT *
+        FROM users
+        WHERE id=?
+        """,
+        (uid,)
     )
 
-    return cur.fetchone()
+    return cursor.fetchone()
 
 
 
-def set_personality(uid,name):
+def update_personality(uid,name):
 
-    cur.execute(
-    """
-    UPDATE users
-    SET personality=?
-    WHERE id=?
-    """,
-    (
-        name,
-        uid
-    ))
+    cursor.execute(
+        """
+        UPDATE users
+        SET personality=?
+        WHERE id=?
+        """,
+        (
+            name,
+            uid
+        )
+    )
+
+    db.commit()
+
+
+
+def update_history(uid,text):
+
+    cursor.execute(
+        """
+        UPDATE users
+        SET history=?
+        WHERE id=?
+        """,
+        (
+            text[-3000:],
+            uid
+        )
+    )
 
     db.commit()
 
 
 
 # ==========================
-# Start
+# Channel
 # ==========================
 
 
-@bot.message_handler(
-commands=["start"]
-)
+def check_channel(uid):
+
+    try:
+
+        member = bot.get_chat_member(
+            CHANNEL,
+            uid
+        )
+
+        return member.status in [
+            "member",
+            "administrator",
+            "creator"
+        ]
+
+    except:
+
+        return True
+
+
+
+# ==========================
+# START
+# ==========================
+
+
+@bot.message_handler(commands=["start"])
 def start(message):
 
-    create_user(
-        message.from_user.id
-    )
+    uid = message.from_user.id
+
+    create_user(uid)
+
+
+    if message.chat.type=="private":
+
+        if not check_channel(uid):
+
+            bot.reply_to(
+                message,
+                "🔒 اول عضو کانال شو:\n\nhttps://t.me/hvxxxklllll"
+            )
+
+            return
 
 
     bot.reply_to(
         message,
 """
-🔥 <b>Sigma Gemini AI</b>
-
-فعال شد 😎
-
+🔥 <b>Sigma AI فعال شد</b>
 
 دستورات:
 
 /list
 لیست شخصیت ها
 
-
 /set نام
 تغییر شخصیت
 
-
 ساخت تصویر:
-برای تصویر
-
+ساخت تصویر آزمایشی
 
 /admin
 پنل مالک
@@ -217,42 +257,36 @@ def start(message):
 
 
 # ==========================
-# List
+# LIST
 # ==========================
 
 
-@bot.message_handler(
-commands=["list"]
-)
-def list_personality(message):
+@bot.message_handler(commands=["list"])
+def list_cmd(message):
 
-    text="🎭 شخصیت ها:\n\n"
+    txt="🎭 شخصیت ها:\n\n"
 
+    for x in PERSONALITIES:
 
-    for p in PERSONALITIES:
-
-        text += "• "+p+"\n"
+        txt += "• "+x+"\n"
 
 
     bot.reply_to(
         message,
-        text[:4000]
+        txt[:4000]
     )
 
 
 
 # ==========================
-# Set personality
+# SET
 # ==========================
 
 
-@bot.message_handler(
-commands=["set"]
-)
-def set_character(message):
+@bot.message_handler(commands=["set"])
+def set_cmd(message):
 
     uid=message.from_user.id
-
 
     name=message.text.replace(
         "/set",
@@ -260,12 +294,11 @@ def set_character(message):
     ).strip()
 
 
-
     if name in PERSONALITIES:
 
         create_user(uid)
 
-        set_personality(
+        update_personality(
             uid,
             name
         )
@@ -273,20 +306,23 @@ def set_character(message):
 
         bot.reply_to(
             message,
-            "✅ شخصیت تغییر کرد: "+name
+            "✅ شخصیت تغییر کرد"
         )
 
     else:
 
         bot.reply_to(
             message,
-            "❌ شخصیت وجود ندارد"
+            "❌ پیدا نشد"
+
+
+
         )
 
 
 
 # ==========================
-# Chat Gemini
+# CHAT
 # ==========================
 
 
@@ -307,29 +343,30 @@ def chat(message):
     create_user(uid)
 
 
-    data=get_user(uid)
+    user=get_user(uid)
 
 
-    personality=data[1]
+    personality=user[1]
+
+    history=user[2]
+
 
 
     prompt=f"""
-
 شخصیت:
 {PERSONALITIES[personality]}
 
+تاریخچه:
+{history}
 
 کاربر:
 {message.text}
-
-
-جواب بده:
 """
 
 
     try:
 
-        result=ai.generate_content(
+        result=model.generate_content(
             prompt
         )
 
@@ -339,11 +376,16 @@ def chat(message):
 
     except Exception as e:
 
-        answer="خطا در Gemini"
-
-
         print(e)
 
+        answer="❌ خطای Gemini"
+
+
+
+    update_history(
+        uid,
+        history+"\n"+message.text+"\n"+answer
+    )
 
 
     bot.reply_to(
@@ -354,46 +396,12 @@ def chat(message):
 
 
 # ==========================
-# Image
+# ADMIN
 # ==========================
 
 
-@bot.message_handler(
-func=lambda m:
-m.text and
-m.text.startswith("ساخت تصویر:")
-)
-def image(message):
-
-    prompt=message.text.replace(
-        "ساخت تصویر:",
-        ""
-    )
-
-
-    bot.reply_to(
-        message,
-f"""
-🎨 درخواست تصویر:
-
-{prompt}
-
-برای فعال شدن ساخت تصویر واقعی باید مدل Image Generation روی API فعال باشد.
-"""
-    )
-
-
-
-# ==========================
-# Admin
-# ==========================
-
-
-@bot.message_handler(
-commands=["admin"]
-)
+@bot.message_handler(commands=["admin"])
 def admin(message):
-
 
     if message.from_user.id != OWNER_ID:
 
@@ -405,35 +413,26 @@ def admin(message):
         return
 
 
-
-    cur.execute(
+    cursor.execute(
         "SELECT COUNT(*) FROM users"
     )
 
-
-    count=cur.fetchone()[0]
+    count=cursor.fetchone()[0]
 
 
     bot.reply_to(
         message,
-f"""
-👑 پنل مالک
-
-کاربران:
-{count}
-"""
+        f"👑 کاربران: {count}"
     )
 
 
 
 # ==========================
-# Run
+# RUN
 # ==========================
 
 
-print(
-"Sigma Bot Started"
-)
+print("BOT ONLINE")
 
 
 while True:
@@ -441,12 +440,16 @@ while True:
     try:
 
         bot.infinity_polling(
-            skip_pending=True
+            timeout=60,
+            long_polling_timeout=60
         )
 
 
     except Exception as e:
 
-        print(e)
+        print(
+            "CRASH:",
+            e
+        )
 
-        time.sleep(5)
+        time.sleep(10)
