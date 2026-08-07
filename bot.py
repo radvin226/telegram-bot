@@ -1,31 +1,27 @@
-# =====================================
-# Sigma Gemini Telegram Bot
-# Railway Version
-# =====================================
+# ==========================================
+# Sigma AI Telegram Bot
+# HuggingFace + Inline Keyboard + Railway
+# ==========================================
 
 import telebot
+from telebot import types
+from huggingface_hub import InferenceClient
 import sqlite3
 import time
-import google.generativeai as genai
 
 
 # ==========================
-# TOKEN ها
+# CONFIG
 # ==========================
 
 BOT_TOKEN = "8956404018:AAHdIV2Jhv9FOK9Xs9qqwxsX-AKofRt-fb4" 
 
-GEMINI_KEY = "AQ.Ab8RN6KXcEAaUdLskXVFCiYL0sIemjFV3R0CFnL5zuLwHruk3w" 
+HF_TOKEN = "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"
 
 OWNER_ID = 6420547446
 
 CHANNEL = "@hvxxxklllll"
 
-
-
-# ==========================
-# Telegram
-# ==========================
 
 bot = telebot.TeleBot(
     BOT_TOKEN,
@@ -33,24 +29,21 @@ bot = telebot.TeleBot(
 )
 
 
-
 # ==========================
-# Gemini
+# AI
 # ==========================
 
-genai.configure(
-    api_key=GEMINI_KEY
+ai = InferenceClient(
+    api_key=HF_TOKEN
 )
 
 
-model = genai.GenerativeModel(
-    "gemini-1.5-flash"
-)
+MODEL = "Qwen/Qwen2.5-7B-Instruct"
 
 
 
 # ==========================
-# Database
+# DATABASE
 # ==========================
 
 db = sqlite3.connect(
@@ -58,10 +51,10 @@ db = sqlite3.connect(
     check_same_thread=False
 )
 
-cursor = db.cursor()
+cur = db.cursor()
 
 
-cursor.execute("""
+cur.execute("""
 CREATE TABLE IF NOT EXISTS users(
 id INTEGER PRIMARY KEY,
 personality TEXT,
@@ -69,53 +62,44 @@ history TEXT
 )
 """)
 
+
 db.commit()
 
 
 
 # ==========================
-# Personalities
+# PERSONALITIES
 # ==========================
-
 
 PERSONALITIES = {
 
 "سیگما":
-"آرام، با اعتماد به نفس، مرموز و کوتاه جواب بده.",
+"آرام، با اعتماد به نفس، کوتاه و مرموز جواب بده",
 
 "دوست":
-"مثل دوست صمیمی مهربان صحبت کن.",
+"مثل یک دوست صمیمی مهربان صحبت کن",
 
 "استاد":
-"مثل استاد حرفه ای و آموزشی جواب بده.",
+"مثل یک استاد حرفه‌ای آموزش بده",
 
-"هکر":
-"مثل متخصص تکنولوژی و برنامه نویسی جواب بده.",
+"برنامه نویس":
+"مثل یک متخصص برنامه نویسی جواب بده",
 
 "شوخ":
-"شوخ و سرگرم کننده باش."
+"شوخ و سرگرم کننده باش"
 
 }
 
 
 
-for i in range(1,101):
-
-    PERSONALITIES[
-        f"شخصیت {i}"
-    ] = f"تو شخصیت شماره {i} هستی."
-
-
-
-
 # ==========================
-# User
+# USER FUNCTIONS
 # ==========================
 
 
 def create_user(uid):
 
-    cursor.execute(
+    cur.execute(
         """
         INSERT OR IGNORE INTO users
         VALUES(?,?,?)
@@ -133,7 +117,7 @@ def create_user(uid):
 
 def get_user(uid):
 
-    cursor.execute(
+    cur.execute(
         """
         SELECT *
         FROM users
@@ -142,13 +126,13 @@ def get_user(uid):
         (uid,)
     )
 
-    return cursor.fetchone()
+    return cur.fetchone()
 
 
 
-def update_personality(uid,name):
+def set_personality(uid,name):
 
-    cursor.execute(
+    cur.execute(
         """
         UPDATE users
         SET personality=?
@@ -164,53 +148,90 @@ def update_personality(uid,name):
 
 
 
-def update_history(uid,text):
+def save_history(uid,text):
 
-    cursor.execute(
+    cur.execute(
         """
         UPDATE users
         SET history=?
         WHERE id=?
         """,
         (
-            text[-3000:],
+            text[-4000:],
             uid
         )
     )
+    
 
     db.commit()
+    # ==========================================
+# INLINE KEYBOARDS
+# ==========================================
+
+
+def main_menu():
+
+    kb = types.InlineKeyboardMarkup()
+
+    kb.add(
+        types.InlineKeyboardButton(
+            "🤖 چت با Sigma AI",
+            callback_data="chat"
+        )
+    )
+
+    kb.add(
+        types.InlineKeyboardButton(
+            "🎭 تغییر شخصیت",
+            callback_data="personality"
+        )
+    )
+
+    kb.add(
+        types.InlineKeyboardButton(
+            "📚 لیست شخصیت ها",
+            callback_data="list"
+        )
+    )
+
+    kb.add(
+        types.InlineKeyboardButton(
+            "👑 پنل مدیریت",
+            callback_data="admin"
+        )
+    )
+
+    return kb
 
 
 
-# ==========================
-# Channel
-# ==========================
+def personality_menu():
 
+    kb = types.InlineKeyboardMarkup()
 
-def check_channel(uid):
+    for name in PERSONALITIES:
 
-    try:
-
-        member = bot.get_chat_member(
-            CHANNEL,
-            uid
+        kb.add(
+            types.InlineKeyboardButton(
+                "🎭 "+name,
+                callback_data="set_"+name
+            )
         )
 
-        return member.status in [
-            "member",
-            "administrator",
-            "creator"
-        ]
+    kb.add(
+        types.InlineKeyboardButton(
+            "⬅️ برگشت",
+            callback_data="back"
+        )
+    )
 
-    except:
-
-        return True
-
+    return kb
 
 
-# ==========================
+
+# ==========================================
 # START
-# ==========================
+# ==========================================
 
 
 @bot.message_handler(commands=["start"])
@@ -221,171 +242,219 @@ def start(message):
     create_user(uid)
 
 
-    if message.chat.type=="private":
-
-        if not check_channel(uid):
-
-            bot.reply_to(
-                message,
-                "🔒 اول عضو کانال شو:\n\nhttps://t.me/hvxxxklllll"
-            )
-
-            return
-
-
     bot.reply_to(
         message,
-"""
+        """
 🔥 <b>Sigma AI فعال شد</b>
 
-دستورات:
+سلام 👋
 
-/list
-لیست شخصیت ها
+من یک هوش مصنوعی با چند شخصیت هستم.
 
-/set نام
-تغییر شخصیت
-
-ساخت تصویر:
-ساخت تصویر آزمایشی
-
-/admin
-پنل مالک
-"""
+از منو انتخاب کن:
+        """,
+        reply_markup=main_menu()
     )
 
 
 
-# ==========================
-# LIST
-# ==========================
+# ==========================================
+# CALLBACK BUTTONS
+# ==========================================
 
 
-@bot.message_handler(commands=["list"])
-def list_cmd(message):
+@bot.callback_query_handler(
+    func=lambda call: True
+)
+def buttons(call):
 
-    txt="🎭 شخصیت ها:\n\n"
-
-    for x in PERSONALITIES:
-
-        txt += "• "+x+"\n"
+    uid = call.from_user.id
 
 
-    bot.reply_to(
-        message,
-        txt[:4000]
-    )
+    if call.data == "chat":
+
+        bot.answer_callback_query(call.id)
+
+        bot.send_message(
+            uid,
+            "💬 پیام خودت را بفرست..."
+        )
+
+
+    elif call.data == "personality":
+
+        bot.edit_message_text(
+            "🎭 یک شخصیت انتخاب کن:",
+            uid,
+            call.message.message_id,
+            reply_markup=personality_menu()
+        )
+
+
+    elif call.data == "list":
+
+        txt="🎭 شخصیت ها:\n\n"
+
+        for p in PERSONALITIES:
+            txt += "• "+p+"\n"
+
+
+        bot.edit_message_text(
+            txt,
+            uid,
+            call.message.message_id,
+            reply_markup=main_menu()
+        )
 
 
 
-# ==========================
-# SET
-# ==========================
+    elif call.data.startswith("set_"):
+
+        name = call.data.replace(
+            "set_",
+            ""
+        )
 
 
-@bot.message_handler(commands=["set"])
-def set_cmd(message):
-
-    uid=message.from_user.id
-
-    name=message.text.replace(
-        "/set",
-        ""
-    ).strip()
-
-
-    if name in PERSONALITIES:
-
-        create_user(uid)
-
-        update_personality(
+        set_personality(
             uid,
             name
         )
 
 
-        bot.reply_to(
-            message,
-            "✅ شخصیت تغییر کرد"
-        )
-
-    else:
-
-        bot.reply_to(
-            message,
-            "❌ پیدا نشد"
-
-
-
+        bot.edit_message_text(
+            f"✅ شخصیت تغییر کرد به:\n<b>{name}</b>",
+            uid,
+            call.message.message_id,
+            reply_markup=main_menu()
         )
 
 
 
-# ==========================
-# CHAT
-# ==========================
+    elif call.data == "back":
+
+        bot.edit_message_text(
+            "🔥 منوی اصلی",
+            uid,
+            call.message.message_id,
+            reply_markup=main_menu()
+        )
+        # ==========================================
+# AI CHAT
+# ==========================================
 
 
 @bot.message_handler(
-func=lambda m:
-m.content_type=="text"
+    func=lambda m: m.content_type == "text"
 )
 def chat(message):
 
-
+    # دستورات را رد کن
     if message.text.startswith("/"):
-
         return
 
 
-    uid=message.from_user.id
+    uid = message.from_user.id
 
     create_user(uid)
 
 
-    user=get_user(uid)
+    user = get_user(uid)
 
 
-    personality=user[1]
+    personality = user[1]
 
-    history=user[2]
+    history = user[2]
 
 
 
-    prompt=f"""
+    prompt = f"""
+تو یک هوش مصنوعی هستی.
+
 شخصیت:
-{PERSONALITIES[personality]}
+{PERSONALITIES.get(personality)}
 
-تاریخچه:
+تاریخچه گفتگو:
 {history}
+
 
 کاربر:
 {message.text}
+
+
+پاسخ:
 """
+
 
 
     try:
 
-        result=model.generate_content(
-            prompt
+        bot.send_chat_action(
+            uid,
+            "typing"
         )
 
 
-        answer=result.text
+        response = ai.chat_completion(
+
+            model=MODEL,
+
+            messages=[
+                {
+                    "role":"system",
+                    "content":
+                    PERSONALITIES.get(
+                        personality
+                    )
+                },
+
+                {
+                    "role":"user",
+                    "content":prompt
+                }
+            ],
+
+            max_tokens=500
+        )
+
+
+        answer = (
+            response
+            .choices[0]
+            .message
+            .content
+        )
+
 
 
     except Exception as e:
 
-        print(e)
+        print(
+            "AI ERROR:",
+            e
+        )
 
-        answer="❌ خطای Gemini"
+        answer = """
+❌ خطا در ارتباط با هوش مصنوعی
+
+لطفاً دوباره تلاش کن.
+"""
 
 
 
-    update_history(
+    save_history(
         uid,
-        history+"\n"+message.text+"\n"+answer
+        history
+        +
+        "\nکاربر:"
+        +
+        message.text
+        +
+        "\nAI:"
+        +
+        answer
     )
+
 
 
     bot.reply_to(
@@ -395,12 +464,81 @@ def chat(message):
 
 
 
-# ==========================
-# ADMIN
-# ==========================
+# ==========================================
+# COMMAND LIST
+# ==========================================
 
 
-@bot.message_handler(commands=["admin"])
+@bot.message_handler(
+    commands=["menu"]
+)
+def menu(message):
+
+    bot.send_message(
+        message.chat.id,
+        "🔥 منوی اصلی:",
+        reply_markup=main_menu()
+    )
+
+
+
+@bot.message_handler(
+    commands=["list"]
+)
+def list_command(message):
+
+    txt="🎭 شخصیت ها:\n\n"
+
+    for p in PERSONALITIES:
+        txt += "• "+p+"\n"
+
+
+    bot.reply_to(
+        message,
+        txt
+    )
+    # ==========================================
+# ADMIN PANEL
+# ==========================================
+
+
+def admin_menu():
+
+    kb = types.InlineKeyboardMarkup()
+
+
+    kb.add(
+        types.InlineKeyboardButton(
+            "👥 تعداد کاربران",
+            callback_data="users_count"
+        )
+    )
+
+
+    kb.add(
+        types.InlineKeyboardButton(
+            "📢 پیام همگانی",
+            callback_data="broadcast"
+        )
+    )
+
+
+    kb.add(
+        types.InlineKeyboardButton(
+            "⬅️ برگشت",
+            callback_data="back"
+        )
+    )
+
+
+    return kb
+
+
+
+
+@bot.message_handler(
+    commands=["admin"]
+)
 def admin(message):
 
     if message.from_user.id != OWNER_ID:
@@ -413,26 +551,156 @@ def admin(message):
         return
 
 
-    cursor.execute(
-        "SELECT COUNT(*) FROM users"
+    bot.send_message(
+        message.chat.id,
+        "👑 پنل مدیریت",
+        reply_markup=admin_menu()
     )
 
-    count=cursor.fetchone()[0]
+
+
+
+# اضافه کردن دکمه های ادمین
+old_buttons = buttons
+
+
+@bot.callback_query_handler(
+    func=lambda call: call.data in [
+        "admin",
+        "users_count",
+        "broadcast"
+    ]
+)
+def admin_buttons(call):
+
+    uid = call.from_user.id
+
+
+    if uid != OWNER_ID:
+
+        bot.answer_callback_query(
+            call.id,
+            "❌ دسترسی ندارید"
+        )
+
+        return
+
+
+
+    if call.data == "admin":
+
+
+        bot.edit_message_text(
+
+            "👑 پنل مدیریت",
+
+            uid,
+
+            call.message.message_id,
+
+            reply_markup=admin_menu()
+
+        )
+
+
+
+    elif call.data == "users_count":
+
+
+        cur.execute(
+            "SELECT COUNT(*) FROM users"
+        )
+
+
+        count = cur.fetchone()[0]
+
+
+        bot.answer_callback_query(
+            call.id
+        )
+
+
+        bot.send_message(
+            uid,
+            f"👥 کاربران: {count}"
+        )
+
+
+
+    elif call.data == "broadcast":
+
+
+        bot.send_message(
+            uid,
+            "📢 متن پیام همگانی را ارسال کن:"
+        )
+
+
+        bot.register_next_step_handler(
+            call.message,
+            broadcast_send
+        )
+
+
+
+
+
+def broadcast_send(message):
+
+    if message.from_user.id != OWNER_ID:
+        return
+
+
+    text = message.text
+
+
+    cur.execute(
+        "SELECT id FROM users"
+    )
+
+
+    users = cur.fetchall()
+
+
+    sent = 0
+
+
+    for u in users:
+
+        try:
+
+            bot.send_message(
+                u[0],
+                text
+            )
+
+            sent += 1
+
+
+        except:
+
+            pass
+
 
 
     bot.reply_to(
         message,
-        f"👑 کاربران: {count}"
+        f"✅ ارسال شد: {sent}"
     )
 
 
 
-# ==========================
+
+
+# ==========================================
 # RUN
-# ==========================
+# ==========================================
 
 
-print("BOT ONLINE")
+print(
+    "🔥 Sigma AI BOT ONLINE"
+)
+
 
 
 while True:
