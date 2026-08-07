@@ -14,9 +14,9 @@ import time
 # CONFIG
 # ==========================
 
-BOT_TOKEN = "8956404018:AAHdIV2Jhv9FOK9Xs9qqwxsX-AKofRt-fb4" 
+BOT_TOKEN = "8956404018:AAHdIV2Jhv9FOK9Xs9qqwxsX-AKofRt-fb" 
 
-HF_TOKEN = "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"
+HF_TOKEN = "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"
 
 OWNER_ID = 6420547446
 
