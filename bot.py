@@ -18,13 +18,14 @@ import os
 # ==========================
 
 
-BOT_TOKEN = "PUT_YOUR_TELEGRAM_TOKEN_HERE"
+BOT_TOKEN = "8956404018:AAHdIV2Jhv9FOK9Xs9qqwxsX-AKofRt-fb4 
+"
 
 
 OWNER_ID = 6420547446
 
 
-CHANNEL = "@YOUR_CHANNEL"
+CHANNEL = "@hvxxxklllll"
 
 
 
