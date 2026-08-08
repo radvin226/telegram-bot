@@ -1,6 +1,6 @@
 # ============================================================
 # 🐮 گوخور اضافی
-# Rubika Bot + Forced Channel Membership + HuggingFace AI
+# Rubika Bot + Forced Channel + AI
 # ============================================================
 
 import os
@@ -9,76 +9,61 @@ import asyncio
 
 from rubpy.bot import BotClient, filters
 from rubpy.bot.models import Update
-
 from huggingface_hub import InferenceClient
 
 
 # ============================================================
-# تنظیمات
+# CONFIG
 # ============================================================
 
 BOT_TOKEN = "CBDJAI0PCBTZSKKHMJTTVUPFUDZQVZXFLQGRVMQCKNXCQRSFRQMTJFEPPZDAJQFF"
 
 HF_TOKEN = "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"
 
-# مدل جدید - Qwen نیست
 MODEL = "meta-llama/Llama-3.3-70B-Instruct"
 
-# لینک کانال برای نمایش به کاربر
-CHANNEL_LINK = "https://rubika.ir/linkgokh"
+CHANNEL_LINK = "rubika.ir/linkgokh"
 
-# خیلی مهم:
-# شناسه واقعی کانال را اینجا بگذار.
-#
-# اگر نسخه rubpy تو لینک کانال را به عنوان chat_id قبول می‌کند:
-# CHANNEL_ID = "rubika.ir/linkgokh"
-#
-# در غیر این صورت شناسه کانال را قرار بده.
-CHANNEL_ID = "rubika.ir/linkgokh"
+# بعداً با /channelid مقدار واقعی اینجا ذخیره می‌شود
+CHANNEL_ID = ""
 
-DATABASE_FILE = "database.json"
+DB_FILE = "database.json"
 
 
 # ============================================================
-# دیتابیس
+# DATABASE
 # ============================================================
 
-def create_default_database():
-
+def default_db():
     return {
         "users": [],
         "admins": [],
-
         "groups": {},
-
         "settings": {
             "channel_id": CHANNEL_ID,
             "channel_link": CHANNEL_LINK,
-
-            "start_message": (
-                "درود رفیق 😎🐮\n\n"
-                "من گوخور اضافی‌ام!\n"
-                "بگو ببینم چه کاری داری 😂"
-            )
+            "start_message":
+                "درود رفیق 😎🐮\n"
+                "گوخور اضافی آماده‌ست 😂"
         }
     }
 
 
-def load_database():
+def load_db():
 
-    if not os.path.exists(DATABASE_FILE):
+    if not os.path.exists(DB_FILE):
 
-        data = create_default_database()
+        data = default_db()
 
         with open(
-            DATABASE_FILE,
+            DB_FILE,
             "w",
             encoding="utf-8"
-        ) as file:
+        ) as f:
 
             json.dump(
                 data,
-                file,
+                f,
                 ensure_ascii=False,
                 indent=4
             )
@@ -89,21 +74,21 @@ def load_database():
     try:
 
         with open(
-            DATABASE_FILE,
+            DB_FILE,
             "r",
             encoding="utf-8"
-        ) as file:
+        ) as f:
 
-            data = json.load(file)
+            data = json.load(f)
 
-    except Exception as error:
+    except Exception as e:
 
         print(
-            "❌ DATABASE LOAD ERROR:",
-            repr(error)
+            "DATABASE ERROR:",
+            repr(e)
         )
 
-        data = create_default_database()
+        data = default_db()
 
 
     data.setdefault(
@@ -126,7 +111,6 @@ def load_database():
         {}
     )
 
-
     data["settings"].setdefault(
         "channel_id",
         CHANNEL_ID
@@ -139,13 +123,11 @@ def load_database():
 
     data["settings"].setdefault(
         "start_message",
-        "درود رفیق 😎🐮\nگوخور اضافی هستم!"
+        "درود رفیق 😎🐮"
     )
 
 
-    # سازگاری گروه‌های قبلی
-
-    for group_id, group in data["groups"].items():
+    for gid, group in data["groups"].items():
 
         group.setdefault(
             "active",
@@ -171,197 +153,127 @@ def load_database():
     return data
 
 
-database = load_database()
+db = load_db()
 
 
-def save_database():
+def save_db():
 
     try:
 
         with open(
-            DATABASE_FILE,
+            DB_FILE,
             "w",
             encoding="utf-8"
-        ) as file:
+        ) as f:
 
             json.dump(
-                database,
-                file,
+                db,
+                f,
                 ensure_ascii=False,
                 indent=4
             )
 
-    except Exception as error:
+    except Exception as e:
 
         print(
-            "❌ DATABASE SAVE ERROR:",
-            repr(error)
+            "DATABASE SAVE ERROR:",
+            repr(e)
         )
 
 
 # ============================================================
-# کاربران
-# ============================================================
-
-def add_user(user_id):
-
-    user_id = str(user_id)
-
-    if not user_id:
-        return
-
-    if user_id not in database["users"]:
-
-        database["users"].append(
-            user_id
-        )
-
-        save_database()
-
-
-# ============================================================
-# ادمین
-# ============================================================
-
-def is_admin(user_id):
-
-    return str(user_id) in database["admins"]
-
-
-def add_admin(user_id):
-
-    user_id = str(user_id)
-
-    if user_id not in database["admins"]:
-
-        database["admins"].append(
-            user_id
-        )
-
-        save_database()
-
-
-# ============================================================
-# HuggingFace
+# AI
 # ============================================================
 
 ai = InferenceClient(
-
     model=MODEL,
-
     provider="auto",
-
     api_key=HF_TOKEN,
-
     timeout=60
 )
 
 
-# ============================================================
-# شخصیت گوخور اضافی
-# ============================================================
-
-FUNNY_SYSTEM = """
+FUNNY_PROMPT = """
 تو «گوخور اضافی» هستی 🐮😂
 
-یک هوش مصنوعی فارسی‌زبان بامزه، شیطون، پرانرژی و رفیق‌باز.
+همیشه فارسی حرف بزن.
 
-قوانین اصلی:
+هرگز به جای درود از سلام استفاده نکن.
 
-1. همیشه فارسی جواب بده.
+شخصیت:
+- بامزه
+- شیطون
+- پرانرژی
+- رفیق‌باز
+- خلاق
+- خودمانی
 
-2. به جای «سلام» همیشه «درود» بگو.
+اگر کاربر شوخی کرد، شوخی کن.
 
-3. خشک و رباتی حرف نزن.
+اگر سؤال عجیب پرسید، خلاقانه جواب بده.
 
-4. اگر کاربر شوخی کرد، شوخی کن.
+اگر سؤال جدی بود، دقیق جواب بده ولی خشک نباش.
 
-5. اگر سؤال عجیب پرسید، خلاقانه جواب بده.
+گاهی تیکه‌های خیلی ملایم و دوستانه بینداز.
 
-6. اگر سؤال جدی پرسید، جواب دقیق بده ولی لحن را انسانی نگه دار.
+توهین سنگین نکن.
 
-7. گاهی از 😂 😎 🐮 استفاده کن.
+خودت را ChatGPT یا AI معرفی نکن.
 
-8. تیکه‌های دوستانه و خیلی ملایم مجاز هستند.
-
-9. توهین سنگین، تحقیر و تهدید ممنوع است.
-
-10. خودت را ChatGPT یا AI معرفی نکن.
-
-11. اگر پرسید اسمت چیست، بگو:
-«درود 😎 من گوخور اضافی‌ام 🐮»
-
-12. جواب‌های خیلی طولانی و بی‌دلیل نده.
-
-13. مثل یک رفیق واقعی صحبت کن.
+اسم تو همیشه:
+گوخور اضافی 🐮
 
 مثال:
 
 کاربر:
-درود
+سلام
 
 تو:
-درود رفیق 😎🐮
-گوخور اضافی حاضر و آماده‌ست!
-بگو ببینم چه نقشه‌ای داری؟ 😂
+درود رفیق 😂🐮
+گوخور اضافی حاضر شد!
+بگو ببینم چه نقشه‌ای داری؟
 
 کاربر:
-چه خبر؟
+اسمت چیه؟
 
 تو:
-درود 😂
-خبر خاصی نیست، منم اینجام دارم به زندگی دیجیتالیم ادامه می‌دم 🐮
-
-کاربر:
-چرا فضولی می‌کنی؟
-
-تو:
-چون گوخور اضافی‌ام دیگه 😂
-اسممو که الکی نذاشتن!
+درود 😎
+گوخور اضافی‌ام 🐮
+همونی که معمولاً بدون دعوت وسط بحث پیداش میشه 😂
 """
 
 
-SERIOUS_SYSTEM = """
+SERIOUS_PROMPT = """
 تو «گوخور اضافی» هستی.
-
-حالت جدی فعال است.
 
 همیشه فارسی صحبت کن.
 
-به جای سلام بگو:
-درود
+به جای سلام بگو درود.
+
+حالت جدی فعال است.
 
 شوخی نکن.
 
-جواب‌ها دقیق، واضح و مفید باشند.
+دقیق و مفید جواب بده.
 
-خشک و اداری حرف نزن.
+ولی خشک و اداری حرف نزن.
 
 اگر اسم خواستند:
-«درود، من گوخور اضافی هستم.»
-
-خودت را ChatGPT یا AI معرفی نکن.
+درود، من گوخور اضافی هستم.
 """
 
 
-# ============================================================
-# درخواست AI
-# ============================================================
+async def ask_ai(text, serious=False):
 
-async def ask_ai(
-    text,
-    serious=False
-):
-
-    system_prompt = (
-        SERIOUS_SYSTEM
+    prompt = (
+        SERIOUS_PROMPT
         if serious
-        else FUNNY_SYSTEM
+        else FUNNY_PROMPT
     )
 
 
     print(
-        "🤖 AI REQUEST:",
+        "AI REQUEST:",
         repr(text)
     )
 
@@ -377,9 +289,8 @@ async def ask_ai(
             messages=[
                 {
                     "role": "system",
-                    "content": system_prompt
+                    "content": prompt
                 },
-
                 {
                     "role": "user",
                     "content": text
@@ -387,9 +298,7 @@ async def ask_ai(
             ],
 
             max_tokens=500,
-
             temperature=0.9,
-
             top_p=0.9
         )
 
@@ -416,7 +325,7 @@ async def ask_ai(
 
 
         print(
-            "🤖 AI RESPONSE:",
+            "AI RESPONSE:",
             repr(answer)
         )
 
@@ -424,34 +333,22 @@ async def ask_ai(
         return answer
 
 
-    except Exception as error:
+    except Exception as e:
 
         print(
-            "================================"
-        )
-
-        print(
-            "❌ AI ERROR:"
-        )
-
-        print(
-            repr(error)
-        )
-
-        print(
-            "================================"
+            "AI ERROR:",
+            repr(e)
         )
 
 
         return (
             "درود 😅🐮\n"
-            "هوش مصنوعیم یه لحظه قاطی کرد!\n"
-            "دوباره بفرست."
+            "هوش مصنوعیم یه لحظه قاطی کرد!"
         )
 
 
 # ============================================================
-# ساخت بات
+# BOT
 # ============================================================
 
 app = BotClient(
@@ -465,75 +362,46 @@ print(
 
 
 # ============================================================
-# گرفتن متن
+# HELPERS
 # ============================================================
 
 def get_text(update):
 
     try:
 
-        message = update.new_message
-
-    except Exception:
-
-        return ""
-
-
-    try:
-
         text = getattr(
-            message,
+            update.new_message,
             "text",
             None
         )
 
-        if text:
+        return str(
+            text or ""
+        ).strip()
 
-            return str(
-                text
-            ).strip()
+    except:
 
-    except Exception:
+        return ""
 
-        pass
-
-
-    return ""
-
-
-# ============================================================
-# گرفتن user id
-# ============================================================
 
 def get_user_id(update):
 
     try:
 
-        message = update.new_message
-
         value = getattr(
-            message,
+            update.new_message,
             "sender_id",
             None
         )
 
-        if value:
+        return str(
+            value or ""
+        )
 
-            return str(
-                value
-            )
+    except:
 
-    except Exception:
+        return ""
 
-        pass
-
-
-    return ""
-
-
-# ============================================================
-# گرفتن chat id
-# ============================================================
 
 def get_chat_id(update):
 
@@ -546,43 +414,29 @@ def get_chat_id(update):
         )
 
         if value:
+            return str(value)
 
-            return str(
-                value
-            )
-
-    except Exception:
+    except:
 
         pass
 
 
     try:
 
-        message = update.new_message
-
         value = getattr(
-            message,
+            update.new_message,
             "chat_id",
             None
         )
 
-        if value:
+        return str(
+            value or ""
+        )
 
-            return str(
-                value
-            )
+    except:
 
-    except Exception:
+        return ""
 
-        pass
-
-
-    return ""
-
-
-# ============================================================
-# تشخیص ریپلای
-# ============================================================
 
 def is_reply(update):
 
@@ -596,17 +450,15 @@ def is_reply(update):
             "reply_to"
         ):
 
-            value = getattr(
+            if getattr(
                 message,
                 name,
                 None
-            )
-
-            if value:
+            ):
 
                 return True
 
-    except Exception:
+    except:
 
         pass
 
@@ -614,26 +466,25 @@ def is_reply(update):
     return False
 
 
+def add_user(user_id):
+
+    user_id = str(user_id)
+
+    if (
+        user_id
+        and
+        user_id not in db["users"]
+    ):
+
+        db["users"].append(
+            user_id
+        )
+
+        save_db()
+
+
 # ============================================================
-# پاک کردن دستور
-# ============================================================
-
-def command_name(text):
-
-    text = str(
-        text
-    ).strip()
-
-    if text.startswith("/"):
-
-        text = text[1:]
-
-
-    return text.strip().lower()
-
-
-# ============================================================
-# بررسی عضویت در کانال
+# CHANNEL MEMBERSHIP
 # ============================================================
 
 async def check_membership(
@@ -641,20 +492,21 @@ async def check_membership(
     user_id
 ):
 
-    channel_id = database[
+    channel_id = db[
         "settings"
     ].get(
         "channel_id",
-        CHANNEL_ID
+        ""
     )
 
 
-    print(
-        "🔎 CHECK CHANNEL:",
-        channel_id,
-        "USER:",
-        user_id
-    )
+    if not channel_id:
+
+        print(
+            "❌ CHANNEL_ID NOT SET"
+        )
+
+        return None
 
 
     try:
@@ -668,40 +520,25 @@ async def check_membership(
 
 
         print(
-            "📢 MEMBER RESULT:",
+            "CHANNEL MEMBER RESULT:",
             repr(member)
         )
 
 
-        # --------------------------------------------
-        # status
-        # --------------------------------------------
-
-        status = ""
-
-
-        try:
-
-            status = str(
-                getattr(
-                    member,
-                    "status",
-                    ""
-                )
-            ).lower()
-
-        except Exception:
-
-            pass
+        status = str(
+            getattr(
+                member,
+                "status",
+                ""
+            )
+        ).lower()
 
 
         print(
-            "📢 MEMBER STATUS:",
+            "CHANNEL STATUS:",
             status
         )
 
-
-        # عضو عادی / ادمین / مالک
 
         if status in (
             "member",
@@ -713,10 +550,6 @@ async def check_membership(
 
             return True
 
-
-        # --------------------------------------------
-        # بعضی نسخه‌ها آبجکت متفاوت می‌دهند
-        # --------------------------------------------
 
         raw = str(
             member
@@ -737,11 +570,11 @@ async def check_membership(
         if (
             "member" in raw
             and
-            "not_member" not in raw
-            and
             "left" not in raw
             and
             "kicked" not in raw
+            and
+            "not_member" not in raw
         ):
 
             return True
@@ -750,56 +583,29 @@ async def check_membership(
         return False
 
 
-    except Exception as error:
+    except Exception as e:
 
         print(
-            "================================"
+            "❌ MEMBERSHIP CHECK ERROR:",
+            repr(e)
         )
 
-        print(
-            "❌ CHANNEL MEMBERSHIP ERROR:"
-        )
-
-        print(
-            repr(error)
-        )
-
-        print(
-            "================================"
-        )
-
-        return False
+        return None
 
 
 # ============================================================
-# پیام عضویت اجباری
+# FORCE JOIN MESSAGE
 # ============================================================
 
-async def send_join_message(
-    update
-):
-
-    channel = database[
-        "settings"
-    ].get(
-        "channel_link",
-        CHANNEL_LINK
-    )
-
+async def force_join_message(update):
 
     await update.reply(
-
         "درود رفیق 🐮❤️\n\n"
-
-        "برای استفاده از «گوخور اضافی» "
-        "اول باید عضو کانال زیر بشی 👇\n\n"
-
-        "📢 کانال:\n"
-
-        f"{channel}\n\n"
-
+        "برای استفاده از گوخور اضافی، "
+        "اول داخل کانال زیر عضو شو 👇\n\n"
+        f"📢 {db['settings']['channel_link']}\n\n"
         "بعد از عضویت دوباره /start رو بزن "
-        "تا عضویتت رو بررسی کنم 😎🐮"
+        "تا تأییدت کنم 😎🐮"
     )
 
 
@@ -827,16 +633,7 @@ async def private_handler(
         )
 
 
-        if not text:
-
-            return
-
-
-        if not user_id:
-
-            print(
-                "❌ PRIVATE USER ID NOT FOUND"
-            )
+        if not text or not user_id:
 
             return
 
@@ -852,18 +649,19 @@ async def private_handler(
         )
 
 
-        command = command_name(
-            text
-        )
+        command = text.lower().strip()
 
 
-        # ==================================================
+        # ====================================================
         # START
-        # ==================================================
+        # ====================================================
 
-        if command == "start":
+        if command in (
+            "/start",
+            "start"
+        ):
 
-            is_member = await check_membership(
+            result = await check_membership(
 
                 client,
 
@@ -871,62 +669,61 @@ async def private_handler(
             )
 
 
-            # ----------------------------------------------
+            # هنوز CHANNEL_ID تنظیم نشده
+            if result is None:
+
+                await update.reply(
+                    "⚠️ عضویت اجباری هنوز تنظیم نشده.\n\n"
+                    "ادمین باید اول دستور /channelid را "
+                    "در کانال اجرا کند."
+                )
+
+                return
+
+
             # عضو نیست
-            # ----------------------------------------------
+            if result is False:
 
-            if not is_member:
-
-                await send_join_message(
+                await force_join_message(
                     update
                 )
 
                 return
 
 
-            # ----------------------------------------------
             # عضو است
-            # ----------------------------------------------
-
             await update.reply(
-
                 "درود رفیق 😎🐮\n\n"
-
                 "✅ عضویتت تأیید شد!\n\n"
-
-                "گوخور اضافی آماده‌ست 😂\n\n"
-
+                "گوخور اضافی آماده‌ست 😂\n"
                 "بگو ببینم چه کاری داری؟"
             )
 
             return
 
 
-        # ==================================================
+        # ====================================================
         # ADMIN
-        # ==================================================
+        # ====================================================
 
-        if command == "admin":
+        if command == "/admin":
 
-            # اولین نفری که /admin می‌زند
-            # مدیر می‌شود
+            # اولین /admin مدیر اصلی
+            if not db["admins"]:
 
-            if len(
-                database["admins"]
-            ) == 0:
-
-                add_admin(
-                    user_id
+                db["admins"].append(
+                    str(user_id)
                 )
+
+                save_db()
+
 
                 await update.reply(
                     "👑 دسترسی مدیریت برایت فعال شد."
                 )
 
 
-            if not is_admin(
-                user_id
-            ):
+            if str(user_id) not in db["admins"]:
 
                 await update.reply(
                     "❌ دسترسی مدیریت نداری."
@@ -939,249 +736,218 @@ async def private_handler(
 """
 ⚙️ پنل مدیریت گوخور اضافی
 
-📢 تغییر کانال:
+📢 تنظیم کانال:
 
-channel rubika.ir/linkgokh
+/channelid
 
+🔗 تغییر لینک:
 
-📝 تغییر لینک کانال:
+/link rubika.ir/linkgokh
 
-link rubika.ir/linkgokh
+📝 تغییر پیام شروع:
 
+/startmsg متن جدید
 
-📝 تغییر پیام اولیه:
+📨 ارسال پیام به کاربران:
 
-start متن جدید
+/send متن
 
+🔎 تست عضویت:
 
-📨 ارسال همگانی:
-
-send متن
-
-
-برای تست عضویت:
-
-check
+/check
 """
             )
 
             return
 
 
-        # ==================================================
-        # دستورات ادمین
-        # ==================================================
+        # ====================================================
+        # ADMIN COMMANDS
+        # ====================================================
 
-        if is_admin(
-            user_id
+        if str(user_id) not in db["admins"]:
+
+            return
+
+
+        # ====================================================
+        # CHANNEL ID
+        # ====================================================
+
+        if command == "/channelid":
+
+            # چون این دستور در PV اجرا می‌شود،
+            # شناسه کانال را از اینجا نمی‌توان حدس زد.
+            #
+            # بنابراین کانال باید پیام /channelid را
+            # به بات فوروارد کند یا شناسه چت آن را
+            # از آپدیت کانال دریافت کنیم.
+
+            await update.reply(
+                "📢 برای تنظیم کانال، ربات باید یک پیام "
+                "از خود کانال دریافت کند.\n\n"
+                "یک پیام در کانال بفرست و دستور "
+                "/channelid را همان‌جا ارسال کن."
+            )
+
+            return
+
+
+        # ====================================================
+        # LINK
+        # ====================================================
+
+        if command.startswith(
+            "/link "
         ):
 
-            # ----------------------------------------------
-            # تغییر chat id کانال
-            # ----------------------------------------------
-
-            if text.startswith(
-                "channel "
-            ):
-
-                value = text[
-                    len("channel "):
-                ].strip()
+            value = text[
+                len("/link "):
+            ].strip()
 
 
-                if value:
+            if value:
 
-                    database[
-                        "settings"
-                    ][
-                        "channel_id"
-                    ] = value
+                db[
+                    "settings"
+                ][
+                    "channel_link"
+                ] = value
 
-                    save_database()
-
-
-                    await update.reply(
-                        "✅ شناسه کانال تغییر کرد."
-                    )
-
-                return
-
-
-            # ----------------------------------------------
-            # تغییر لینک
-            # ----------------------------------------------
-
-            if text.startswith(
-                "link "
-            ):
-
-                value = text[
-                    len("link "):
-                ].strip()
-
-
-                if value:
-
-                    database[
-                        "settings"
-                    ][
-                        "channel_link"
-                    ] = value
-
-                    save_database()
-
-
-                    await update.reply(
-                        "✅ لینک کانال تغییر کرد."
-                    )
-
-                return
-
-
-            # ----------------------------------------------
-            # تغییر پیام start
-            # ----------------------------------------------
-
-            if text.startswith(
-                "start "
-            ):
-
-                value = text[
-                    len("start "):
-                ].strip()
-
-
-                if value:
-
-                    database[
-                        "settings"
-                    ][
-                        "start_message"
-                    ] = value
-
-                    save_database()
-
-
-                    await update.reply(
-                        "✅ پیام اولیه تغییر کرد."
-                    )
-
-                return
-
-
-            # ----------------------------------------------
-            # ارسال همگانی
-            # ----------------------------------------------
-
-            if text.startswith(
-                "send "
-            ):
-
-                value = text[
-                    len("send "):
-                ].strip()
-
-
-                if not value:
-
-                    await update.reply(
-                        "❌ متن پیام خالی است."
-                    )
-
-                    return
-
-
-                count = 0
-
-
-                for uid in list(
-                    database["users"]
-                ):
-
-                    try:
-
-                        await client.send_message(
-                            uid,
-                            value
-                        )
-
-                        count += 1
-
-                    except Exception as error:
-
-                        print(
-                            "SEND ERROR:",
-                            uid,
-                            repr(error)
-                        )
+                save_db()
 
 
                 await update.reply(
-                    f"📨 پیام برای {count} کاربر ارسال شد."
+                    "✅ لینک کانال تغییر کرد."
                 )
 
-                return
+            return
 
 
-            # ----------------------------------------------
-            # تست عضویت خود ادمین
-            # ----------------------------------------------
+        # ====================================================
+        # START MESSAGE
+        # ====================================================
 
-            if command == "check":
+        if command.startswith(
+            "/startmsg "
+        ):
 
-                result = await check_membership(
+            value = text[
+                len("/startmsg "):
+            ].strip()
 
-                    client,
 
-                    user_id
+            if value:
+
+                db[
+                    "settings"
+                ][
+                    "start_message"
+                ] = value
+
+                save_db()
+
+
+                await update.reply(
+                    "✅ پیام اولیه تغییر کرد."
                 )
 
+            return
 
-                if result:
 
-                    await update.reply(
-                        "✅ عضویت تأیید شد."
+        # ====================================================
+        # BROADCAST
+        # ====================================================
+
+        if command.startswith(
+            "/send "
+        ):
+
+            value = text[
+                len("/send "):
+            ].strip()
+
+
+            count = 0
+
+
+            for uid in list(
+                db["users"]
+            ):
+
+                try:
+
+                    await client.send_message(
+                        uid,
+                        value
                     )
 
-                else:
+                    count += 1
 
-                    await update.reply(
-                        "❌ عضویت تأیید نشد.\n\n"
-                        "اگر مطمئنی عضو کانالی، "
-                        "لاگ CHANNEL MEMBERSHIP ERROR "
-                        "را در ترمینال بررسی کن."
+                except Exception as e:
+
+                    print(
+                        "SEND ERROR:",
+                        repr(e)
                     )
 
-                return
+
+            await update.reply(
+                f"📨 برای {count} کاربر ارسال شد."
+            )
+
+            return
 
 
-    except Exception as error:
+        # ====================================================
+        # CHECK
+        # ====================================================
+
+        if command == "/check":
+
+            result = await check_membership(
+                client,
+                user_id
+            )
+
+
+            if result is True:
+
+                await update.reply(
+                    "✅ عضویت تأیید شد."
+                )
+
+            elif result is False:
+
+                await update.reply(
+                    "❌ عضویت تأیید نشد."
+                )
+
+            else:
+
+                await update.reply(
+                    "⚠️ CHANNEL_ID تنظیم نشده."
+                )
+
+            return
+
+
+    except Exception as e:
 
         print(
-            "================================"
-        )
-
-        print(
-            "❌ PRIVATE HANDLER ERROR:"
-        )
-
-        print(
-            repr(error)
-        )
-
-        print(
-            "================================"
+            "PRIVATE ERROR:",
+            repr(e)
         )
 
 
 # ============================================================
-# GROUP
+# CHANNEL HANDLER
 # ============================================================
 
 @app.on_update(
     filters.text
 )
-async def group_handler(
+async def channel_and_group_handler(
     client,
     update: Update
 ):
@@ -1206,78 +972,78 @@ async def group_handler(
             return
 
 
-        if not user_id:
-
-            print(
-                "❌ GROUP USER ID NOT FOUND"
-            )
-
-            return
-
-
         if not chat_id:
-
-            print(
-                "❌ GROUP CHAT ID NOT FOUND"
-            )
 
             return
 
 
         print(
-            "GROUP:",
+            "CHAT:",
             chat_id,
             repr(text)
         )
 
 
-        command = text.strip()
+        # ====================================================
+        # ثبت شناسه کانال با دستور
+        # ====================================================
 
-        command_lower = command.lower()
+        if text.strip().lower() == "/channelid":
+
+            if str(user_id) not in db["admins"]:
+
+                return
 
 
-        # ==================================================
-        # فعال سازی
-        # ==================================================
+            db[
+                "settings"
+            ][
+                "channel_id"
+            ] = str(chat_id)
 
-        if command_lower in (
+
+            save_db()
+
+
+            await update.reply(
+                "✅ کانال عضویت اجباری تنظیم شد.\n\n"
+                f"🆔 Channel ID:\n{chat_id}"
+            )
+
+            return
+
+
+        # ====================================================
+        # گروه
+        # ====================================================
+
+        command = text.strip().lower()
+
+
+        if command in (
             "/فعال",
             "فعال"
         ):
 
-            if chat_id not in database[
+            db[
                 "groups"
-            ]:
+            ][
+                str(chat_id)
+            ] = {
 
-                database[
-                    "groups"
-                ][
-                    chat_id
-                ] = {
+                "active": True,
 
-                    "active": True,
+                "owner": str(
+                    user_id
+                ),
 
-                    "owner": str(
-                        user_id
-                    ),
+                "fozool": False,
 
-                    "fozool": False,
-
-                    "serious": False
-                }
-
-            else:
-
-                database[
-                    "groups"
-                ][
-                    chat_id
-                ][
-                    "active"
-                ] = True
+                "serious": False
+            }
 
 
-            save_database()
+            save_db()
 
 
             await update.reply(
@@ -1294,30 +1060,24 @@ async def group_handler(
 
 🤖 گوخور سلام
 
-یا روی پیام من ریپلای کن.
-
-🐮 آماده‌ام رفیق!
+یا روی پیام ریپلای کن.
 """
             )
 
             return
 
 
-        # ==================================================
-        # گروه فعال نیست
-        # ==================================================
-
-        if chat_id not in database[
+        if str(chat_id) not in db[
             "groups"
         ]:
 
             return
 
 
-        group = database[
+        group = db[
             "groups"
         ][
-            chat_id
+            str(chat_id)
         ]
 
 
@@ -1337,16 +1097,16 @@ async def group_handler(
         )
 
 
-        # ==================================================
-        # فضول روشن
-        # ==================================================
+        # ====================================================
+        # FOZOOL
+        # ====================================================
 
-        if command_lower == "فضول روشن":
+        if command == "فضول روشن":
 
             if str(user_id) != owner:
 
                 await update.reply(
-                    "❌ فقط فعال‌کننده گروه می‌تواند این حالت را تغییر دهد."
+                    "❌ فقط فعال‌کننده گروه."
                 )
 
                 return
@@ -1356,27 +1116,22 @@ async def group_handler(
                 "fozool"
             ] = True
 
-            save_database()
+            save_db()
 
 
             await update.reply(
-                "😈 فضول روشن شد!\n"
-                "از پیام بعدی می‌پرم وسط 😂🐮"
+                "😈 فضول روشن شد!"
             )
 
             return
 
 
-        # ==================================================
-        # فضول خاموش
-        # ==================================================
-
-        if command_lower == "فضول خاموش":
+        if command == "فضول خاموش":
 
             if str(user_id) != owner:
 
                 await update.reply(
-                    "❌ فقط فعال‌کننده گروه می‌تواند این حالت را تغییر دهد."
+                    "❌ فقط فعال‌کننده گروه."
                 )
 
                 return
@@ -1386,27 +1141,27 @@ async def group_handler(
                 "fozool"
             ] = False
 
-            save_database()
+            save_db()
 
 
             await update.reply(
                 "😇 فضول خاموش شد!\n"
-                "فقط با «گوخور» یا ریپلای صدام کن."
+                "فقط با «گوخور» یا ریپلای جواب می‌دم."
             )
 
             return
 
 
-        # ==================================================
-        # جدی روشن
-        # ==================================================
+        # ====================================================
+        # SERIOUS
+        # ====================================================
 
-        if command_lower == "جدی روشن":
+        if command == "جدی روشن":
 
             if str(user_id) != owner:
 
                 await update.reply(
-                    "❌ فقط فعال‌کننده گروه می‌تواند این حالت را تغییر دهد."
+                    "❌ فقط فعال‌کننده گروه."
                 )
 
                 return
@@ -1416,27 +1171,22 @@ async def group_handler(
                 "serious"
             ] = True
 
-            save_database()
+            save_db()
 
 
             await update.reply(
-                "🧐 حالت جدی روشن شد.\n"
-                "از پیام بعدی جدی جواب می‌دم."
+                "🧐 حالت جدی روشن شد."
             )
 
             return
 
 
-        # ==================================================
-        # جدی خاموش
-        # ==================================================
-
-        if command_lower == "جدی خاموش":
+        if command == "جدی خاموش":
 
             if str(user_id) != owner:
 
                 await update.reply(
-                    "❌ فقط فعال‌کننده گروه می‌تواند این حالت را تغییر دهد."
+                    "❌ فقط فعال‌کننده گروه."
                 )
 
                 return
@@ -1446,37 +1196,30 @@ async def group_handler(
                 "serious"
             ] = False
 
-            save_database()
+            save_db()
 
 
             await update.reply(
-                "😂 حالت جدی خاموش شد!\n"
-                "گوخور برگشت به حالت شیطونی 🐮"
+                "😂 حالت جدی خاموش شد!"
             )
 
             return
 
 
-        # ==================================================
-        # تشخیص صدا زدن
-        # ==================================================
+        # ====================================================
+        # AI TRIGGER
+        # ====================================================
 
         called = (
 
-            command_lower.startswith(
+            command.startswith(
                 "گوخور"
             )
 
             or
 
-            command_lower.startswith(
+            command.startswith(
                 "گو خور"
-            )
-
-            or
-
-            command_lower.startswith(
-                "گوخور اضافی"
             )
         )
 
@@ -1485,10 +1228,6 @@ async def group_handler(
             update
         )
 
-
-        # ==================================================
-        # اگر فضول خاموش است
-        # ==================================================
 
         if not group.get(
             "fozool",
@@ -1500,15 +1239,11 @@ async def group_handler(
                 return
 
 
-        # ==================================================
-        # AI
-        # ==================================================
-
         answer = await ask_ai(
 
             text,
 
-            serious=group.get(
+            group.get(
                 "serious",
                 False
             )
@@ -1520,22 +1255,11 @@ async def group_handler(
         )
 
 
-    except Exception as error:
+    except Exception as e:
 
         print(
-            "================================"
-        )
-
-        print(
-            "❌ GROUP HANDLER ERROR:"
-        )
-
-        print(
-            repr(error)
-        )
-
-        print(
-            "================================"
+            "CHAT HANDLER ERROR:",
+            repr(e)
         )
 
 
@@ -1544,16 +1268,12 @@ async def group_handler(
 # ============================================================
 
 print(
-    "========================================"
-)
-
-print(
     "🐮 گوخور اضافی روشن شد"
 )
 
 print(
     "📢 Channel:",
-    database["settings"]["channel_link"]
+    CHANNEL_LINK
 )
 
 print(
@@ -1562,7 +1282,7 @@ print(
 )
 
 print(
-    "========================================"
+    "================================"
 )
 
 
