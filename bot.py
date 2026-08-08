@@ -25,7 +25,7 @@ MODEL = "meta-llama/Llama-3.3-70B-Instruct"
 CHANNEL_LINK = "rubika.ir/linkgokh"
 
 # بعداً با /channelid مقدار واقعی اینجا ذخیره می‌شود
-CHANNEL_ID = ""
+CHANNEL_ID = "b0w4h0de7af5d1c1d992c8b154e24e7a"
 
 DB_FILE = "database.json"
 
