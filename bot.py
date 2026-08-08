@@ -15,8 +15,9 @@ from huggingface_hub import InferenceClient
 # CONFIG
 # ============================================================
 
-BOT_TOKEN = "توکن جدید روبیکا را اینجا بگذار"
-HF_TOKEN = "توکن جدید HuggingFace را اینجا بگذار"
+BOT_TOKEN = "CBDJAI0PCBTZSKKHMJTTVUPFUDZQVZXFLQGRVMQCKNXCQRSFRQMTJFEPPZDAJQFF"
+
+HF_TOKEN = "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"
 
 CHANNEL_ID = "c=c0DySFl0a7501a52aaea7d7381111798"
 CHANNEL_LINK = "rubika.ir/linkgokh"
