@@ -675,7 +675,195 @@ async def private_handler(
         text
     )
 
+# =========================================================
+# FORCE CHANNEL MEMBERSHIP
+# =========================================================
 
+CHANNEL_USERNAME = "rubika.ir/linkgokh"
+
+
+async def check_channel_member(client, user_id):
+
+    try:
+
+        member = await client.get_chat_member(
+            CHANNEL_USERNAME,
+            str(user_id)
+        )
+
+        print(
+            "CHANNEL MEMBER:",
+            member
+        )
+
+        # تبدیل نتیجه به متن برای اینکه
+        # با نسخه‌های مختلف rubpy سازگارتر باشد
+
+        status = ""
+
+        try:
+            status = str(
+                getattr(
+                    member,
+                    "status",
+                    ""
+                )
+            ).lower()
+
+        except:
+            pass
+
+
+        # وضعیت‌های قابل قبول
+
+        if status in (
+            "member",
+            "administrator",
+            "owner",
+            "creator"
+        ):
+
+            return True
+
+
+        # بعضی نسخه‌ها ممکن است
+        # آبجکت متفاوت برگردانند
+
+        text = str(
+            member
+        ).lower()
+
+
+        if (
+            "member" in text
+            or
+            "administrator" in text
+            or
+            "owner" in text
+            or
+            "creator" in text
+        ):
+
+            if (
+                "left" not in text
+                and
+                "kicked" not in text
+            ):
+
+                return True
+
+
+        return False
+
+
+    except Exception as e:
+
+        print(
+            "CHANNEL CHECK ERROR:",
+            repr(e)
+        )
+
+        return False
+
+
+# =========================================================
+# PRIVATE HANDLER
+# =========================================================
+
+@app.on_update(
+    filters.text,
+    filters.private
+)
+async def private_handler(
+    client,
+    update: Update
+):
+
+    text = get_text(
+        update
+    )
+
+    user_id = get_user_id(
+        update
+    )
+
+
+    if not text or not user_id:
+
+        return
+
+
+    print(
+        "PV:",
+        repr(text)
+    )
+
+
+    add_user(
+        user_id
+    )
+
+
+    command = command_name(
+        text
+    )
+
+
+    # =====================================================
+    # START
+    # =====================================================
+
+    if command == "start":
+
+        # -----------------------------------------------
+        # بررسی عضویت
+        # -----------------------------------------------
+
+        is_member = await check_channel_member(
+            client,
+            user_id
+        )
+
+
+        # -----------------------------------------------
+        # عضو نیست
+        # -----------------------------------------------
+
+        if not is_member:
+
+            await update.reply(
+                "درود رفیق 🐮❤️\n\n"
+                "برای استفاده از «گوخور اضافی» "
+                "اول باید عضو کانال ما بشی.\n\n"
+                "📢 کانال:\n"
+                "rubika.ir/linkgokh\n\n"
+                "بعد از عضویت دوباره /start رو بزن "
+                "تا عضویتت بررسی بشه 😎🐮"
+            )
+
+            return
+
+
+        # -----------------------------------------------
+        # عضو شده
+        # -----------------------------------------------
+
+        await update.reply(
+            "درود رفیق 😎🐮\n\n"
+            "✅ عضویتت تأیید شد!\n\n"
+            "گوخور اضافی آماده‌ست 😂\n"
+            "بگو ببینم چه کاری داری؟"
+        )
+
+        return
+
+
+    # =====================================================
+    # بقیه دستورات خصوصی
+    # =====================================================
+
+    # اینجا بقیه کد private_handler قبلی
+    # مثل /admin قرار می‌گیرد.
     # =====================================================
     # START
     # =====================================================
