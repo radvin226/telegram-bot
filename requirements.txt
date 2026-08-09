@@ -1,3 +1,2 @@
-rubpy
+pyTelegramBotAPI
 huggingface_hub
-requests
