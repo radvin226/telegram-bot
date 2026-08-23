@@ -1,539 +1,388 @@
-# ============================================================
-#                  VOIDCHATER 🐮
-#             Telegram AI Group Bot
-# ============================================================
-
-import os
+import asyncio
 import json
-import time
-import threading
-
-import telebot
-from telebot import types
-from huggingface_hub import InferenceClient
+import os
+from datetime import datetime
 
 
 # ============================================================
-# CONFIG
+# Rubpy
 # ============================================================
 
-BOT_TOKEN = os.getenv("BOT_TOKEN", "").strip()
-HF_TOKEN = os.getenv("HF_TOKEN", "").strip()
-
-AI_MODEL = os.getenv(
-    "AI_MODEL",
-    "meta-llama/Llama-3.3-70B-Instruct"
-).strip()
-
-DB_FILE = "database.json"
-
-
-if not BOT_TOKEN:
-    raise RuntimeError(
-        "❌ BOT_TOKEN در Railway Variables تنظیم نشده است."
-    )
-
-if not HF_TOKEN:
-    raise RuntimeError(
-        "❌ HF_TOKEN در Railway Variables تنظیم نشده است."
-    )
+from rubpy import BotClient
+from rubpy import filters
 
 
 # ============================================================
-# BOT
+# تنظیمات
 # ============================================================
 
-bot = telebot.TeleBot(
-    BOT_TOKEN,
-    parse_mode="HTML",
-    threaded=True
+BOT_TOKEN = "CCFDJD0NTXGROTMRYNTFWCULTGQFIMGSSUQXHXJFGYBVXYAJWJRTNMSKUGAOLOJT"
+
+OWNER_USERNAME = "radvinhha"
+
+DATABASE_FILE = "database.json"
+
+
+# ============================================================
+# ساخت Bot
+# ============================================================
+
+bot = BotClient(
+    token=BOT_TOKEN,
+    rate_limit=0.5
 )
 
 
 # ============================================================
-# DATABASE
+# دیتابیس
 # ============================================================
 
-db_lock = threading.Lock()
-
-
 def default_database():
-
     return {
+        "bot": {
+            "name": "بات ساختمان فدک",
+            "active": True
+        },
+
+        "owner": {
+            "username": OWNER_USERNAME,
+            "user_id": None
+        },
+
         "admins": [],
+
         "users": [],
 
-        "groups": {},
+        "groups": [],
 
-        "settings": {
-            "start_message":
-                "درود رفیق 😂🐮\n\n"
-                "من <b>voidchater</b> هستم.\n"
-                "گوخور اضافی آماده‌ست!"
-        }
+        "bank_cards": [],
+
+        "expenses": [],
+
+        "reminders": []
     }
 
 
-def save_db():
-
-    with db_lock:
-
-        temp_file = DB_FILE + ".tmp"
-
-        with open(
-            temp_file,
-            "w",
-            encoding="utf-8"
-        ) as f:
-
-            json.dump(
-                database,
-                f,
-                ensure_ascii=False,
-                indent=4
-            )
-
-        os.replace(
-            temp_file,
-            DB_FILE
-        )
-
-
-def load_db():
-
-    if not os.path.exists(DB_FILE):
+def create_database():
+    if not os.path.exists(DATABASE_FILE):
 
         data = default_database()
 
         with open(
-            DB_FILE,
+            DATABASE_FILE,
             "w",
             encoding="utf-8"
-        ) as f:
+        ) as file:
 
             json.dump(
                 data,
-                f,
+                file,
                 ensure_ascii=False,
                 indent=4
             )
+
+
+def load_database():
+
+    create_database()
+
+    try:
+
+        with open(
+            DATABASE_FILE,
+            "r",
+            encoding="utf-8"
+        ) as file:
+
+            return json.load(file)
+
+    except Exception:
+
+        data = default_database()
+
+        save_database(data)
 
         return data
 
 
-    try:
+def save_database(data):
 
-        with open(
-            DB_FILE,
-            "r",
-            encoding="utf-8"
-        ) as f:
+    temp_file = DATABASE_FILE + ".tmp"
 
-            data = json.load(f)
+    with open(
+        temp_file,
+        "w",
+        encoding="utf-8"
+    ) as file:
 
-    except Exception as e:
-
-        print(
-            "DATABASE ERROR:",
-            repr(e)
+        json.dump(
+            data,
+            file,
+            ensure_ascii=False,
+            indent=4
         )
 
-        data = default_database()
-
-
-    data.setdefault(
-        "admins",
-        []
+    os.replace(
+        temp_file,
+        DATABASE_FILE
     )
-
-    data.setdefault(
-        "users",
-        []
-    )
-
-    data.setdefault(
-        "groups",
-        {}
-    )
-
-    data.setdefault(
-        "settings",
-        {}
-    )
-
-    data["settings"].setdefault(
-        "start_message",
-        "درود رفیق 😂🐮"
-    )
-
-    return data
-
-
-database = load_db()
 
 
 # ============================================================
-# DATABASE HELPERS
+# ابزارها
 # ============================================================
 
-def add_user(user_id):
+def normalize(text):
 
-    uid = str(user_id)
-
-    if uid not in database["users"]:
-
-        database["users"].append(
-            uid
-        )
-
-        save_db()
-
-
-def add_admin(user_id):
-
-    uid = str(user_id)
-
-    if uid not in database["admins"]:
-
-        database["admins"].append(
-            uid
-        )
-
-        save_db()
-
-
-def is_admin(user_id):
-
-    return str(user_id) in [
-        str(x)
-        for x in database["admins"]
-    ]
-
-
-# ============================================================
-# AI PERSONALITY
-# ============================================================
-
-FUNNY_SYSTEM = r"""
-تو «گوخور اضافی» هستی 😂🐮
-
-شخصیت تو:
-
-- بددهن
-- بامزه
-- شیطون
-- پرانرژی
-- دوستانه
-- خلاق
-- رفیق‌باز
-
-قوانین:
-
-1. همیشه فارسی جواب بده.
-
-2. هیچ‌وقت از «سلام» استفاده نکن.
-به‌جایش همیشه «درود» بگو.
-
-3. خودت را ChatGPT معرفی نکن.
-
-4. اگر کاربر پرسید اسمت چیه:
-«😎 من گوخور اضافی‌ام»
-
-5. اگر کاربر شوخی کرد، شوخی کن.
-
-6. اگر سؤال خیلی عجیب پرسید،
-با لحن شوخی بگو:
-«خیلی خری 😂»
-
-7. تیکه‌های سنگین و شوخی‌های تند داشته باش،
-ولی تهدید، نفرت‌پراکنی یا توهین به گروه‌های محافظت‌شده نکن.
-
-8. اگر سؤال علمی یا جدی بود،
-درست و مفید جواب بده.
-
-9. جواب‌ها طبیعی باشند، نه خشک و رباتی.
-
-10. از ایموجی زیاد ولی طبیعی استفاده کن.
-
-11. زیادی توضیح اضافه نده مگر اینکه کاربر درخواست کند.
-
-12. اگر کاربر گفت سلام:
-
-«درود رفیق 😂
-گوخور اضافی حاضر شد!
-بگو ببینم چه نقشه‌ای داری؟»
-
-13. اگر کاربر پرسید اسمت چیه:
-
-«گوخور اضافی‌ام 😂
-همونی که بی‌دعوت وسط بحث پیداش میشه.»
-
-14. اگر کاربر پرسید چه خبر،
-خودمانی و بامزه جواب بده.
-
-15. همیشه فارسی صحبت کن.
-"""
-
-
-SERIOUS_SYSTEM = r"""
-تو «گوخور اضافی» هستی.
-
-حالت جدی فعال است.
-
-همیشه فارسی صحبت کن.
-
-به جای «سلام» بگو «درود».
-
-شوخی نکن.
-
-جواب دقیق، واضح و مفید بده.
-
-خشک و اداری باش.
-
-خودت را ChatGPT معرفی نکن.
-
-اگر اسم پرسیده شد بگو:
-
-«درود، من گوخور اضافی بودم،
-ولی الان گوخور کت‌شلواری‌ام.»
-"""
-
-
-# ============================================================
-# AI
-# ============================================================
-
-ai = InferenceClient(
-    api_key=HF_TOKEN
-)
-
-
-def ask_ai(
-    text,
-    serious=False
-):
-
-    system = (
-        SERIOUS_SYSTEM
-        if serious
-        else FUNNY_SYSTEM
-    )
-
-    try:
-
-        result = ai.chat_completion(
-
-            model=AI_MODEL,
-
-            messages=[
-
-                {
-                    "role": "system",
-                    "content": system
-                },
-
-                {
-                    "role": "user",
-                    "content": text
-                }
-
-            ],
-
-            max_tokens=500,
-
-            temperature=0.9,
-
-            top_p=0.9
-        )
-
-
-        answer = (
-            result
-            .choices[0]
-            .message
-            .content
-        )
-
-
-        if not answer:
-
-            return (
-                "درود 😂🐮\n"
-                "مغزم یه لحظه هنگ کرد!"
-            )
-
-
-        return str(
-            answer
-        ).strip()
-
-
-    except Exception as e:
-
-        print(
-            "AI ERROR:",
-            repr(e)
-        )
-
-        return (
-            "درود 😅🐮\n"
-            "هوش مصنوعیم یه لحظه قاطی کرد!"
-        )
-
-
-# ============================================================
-# MAIN INLINE KEYBOARD
-# ============================================================
-
-def main_keyboard():
-
-    keyboard = types.InlineKeyboardMarkup(
-        row_width=2
-    )
-
-
-    keyboard.add(
-
-        types.InlineKeyboardButton(
-            "🤖 شروع گفتگو",
-            callback_data="chat"
-        ),
-
-        types.InlineKeyboardButton(
-            "🛠 تنظیمات",
-            callback_data="settings"
-        )
-    )
-
-
-    keyboard.add(
-
-        types.InlineKeyboardButton(
-            "📞 پشتیبانی",
-            callback_data="support"
-        ),
-
-        types.InlineKeyboardButton(
-            "📦 محصولات",
-            callback_data="products"
-        )
-    )
-
-
-    keyboard.add(
-
-        types.InlineKeyboardButton(
-            "📋 دستورات",
-            callback_data="commands"
-        )
-    )
-
-
-    return keyboard
-
-
-# ============================================================
-# ADMIN KEYBOARD
-# ============================================================
-
-def admin_keyboard():
-
-    keyboard = types.InlineKeyboardMarkup(
-        row_width=2
-    )
-
-
-    keyboard.add(
-
-        types.InlineKeyboardButton(
-            "📋 دستورات",
-            callback_data="commands"
-        ),
-
-        types.InlineKeyboardButton(
-            "👑 وضعیت من",
-            callback_data="admin_status"
-        )
-    )
-
-
-    keyboard.add(
-
-        types.InlineKeyboardButton(
-            "⚙️ تنظیمات",
-            callback_data="settings"
-        )
-    )
-
-
-    return keyboard
-
-
-# ============================================================
-# GROUP KEYBOARD
-# ============================================================
-
-def group_keyboard():
-
-    keyboard = types.InlineKeyboardMarkup(
-        row_width=2
-    )
-
-
-    keyboard.add(
-
-        types.InlineKeyboardButton(
-            "📋 دستورات",
-            callback_data="commands"
-        ),
-
-        types.InlineKeyboardButton(
-            "😈 وضعیت فضول",
-            callback_data="fozool_status"
-        )
-    )
-
-
-    keyboard.add(
-
-        types.InlineKeyboardButton(
-            "🧐 وضعیت جدی",
-            callback_data="serious_status"
-        )
-    )
-
-
-    return keyboard
-
-
-# ============================================================
-# COMMAND LIST
-# ============================================================
-
-def commands_text():
+    if not text:
+        return ""
 
     return (
-        "🐮 <b>دستورات voidchater</b>\n\n"
+        str(text)
+        .strip()
+        .replace("ي", "ی")
+        .replace("ك", "ک")
+        .replace("\u200c", " ")
+    )
 
-        "👑 <b>مدیریت</b>\n"
-        "/admin — ادمین شدن در PV\n"
-        "/admins — لیست ادمین‌های گروه\n\n"
 
-        "🟢 <b>فعال‌سازی گروه</b>\n"
-        "<code>فعال</code>\n\n"
+def get_message(update):
 
-        "😈 <b>فضول</b>\n"
-        "فضول روشن\n"
-        "فضول خاموش\n\n"
+    return getattr(
+        update,
+        "new_message",
+        None
+    )
 
-        "🧐 <b>حالت جدی</b>\n"
-        "جدی روشن\n"
-        "جدی خاموش\n\n"
 
-        "🤖 <b>هوش مصنوعی</b>\n"
-        "گوخور سلام\n\n"
+def get_text(update):
 
-        "یا روی پیام بات ریپلای کن."
+    message = get_message(update)
+
+    if not message:
+        return ""
+
+    return normalize(
+        getattr(
+            message,
+            "text",
+            ""
+        )
+    )
+
+
+def get_sender_id(update):
+
+    message = get_message(update)
+
+    if not message:
+        return None
+
+    return getattr(
+        message,
+        "sender_id",
+        None
+    )
+
+
+def get_chat_id(update):
+
+    return getattr(
+        update,
+        "chat_id",
+        None
+    )
+
+
+def format_money(amount):
+
+    try:
+        return f"{int(amount):,}"
+    except Exception:
+        return str(amount)
+
+
+# ============================================================
+# کاربر
+# ============================================================
+
+def save_user(update):
+
+    user_id = get_sender_id(update)
+
+    if not user_id:
+        return
+
+    data = load_database()
+
+    if user_id not in data["users"]:
+
+        data["users"].append(user_id)
+
+        save_database(data)
+
+
+# ============================================================
+# مالک
+# ============================================================
+
+def is_owner(update):
+
+    data = load_database()
+
+    sender_id = get_sender_id(update)
+
+    owner_id = data["owner"].get("user_id")
+
+    if owner_id:
+
+        return str(sender_id) == str(owner_id)
+
+    return False
+
+
+def register_owner(update):
+
+    sender_id = get_sender_id(update)
+
+    if not sender_id:
+        return False
+
+    data = load_database()
+
+    owner_id = data["owner"].get("user_id")
+
+    if owner_id is None:
+
+        data["owner"]["user_id"] = sender_id
+
+        save_database(data)
+
+        return True
+
+    return str(owner_id) == str(sender_id)
+
+
+# ============================================================
+# ادمین
+# ============================================================
+
+def is_admin(update):
+
+    if is_owner(update):
+        return True
+
+    sender_id = get_sender_id(update)
+
+    if not sender_id:
+        return False
+
+    data = load_database()
+
+    return any(
+        str(admin["user_id"]) == str(sender_id)
+        for admin in data["admins"]
+    )
+
+
+def add_admin(user_id, username=""):
+
+    data = load_database()
+
+    for admin in data["admins"]:
+
+        if str(admin["user_id"]) == str(user_id):
+            return False
+
+    data["admins"].append({
+        "user_id": user_id,
+        "username": username
+    })
+
+    save_database(data)
+
+    return True
+
+
+# ============================================================
+# گروه
+# ============================================================
+
+def register_group(update):
+
+    chat_id = get_chat_id(update)
+
+    if not chat_id:
+        return
+
+    data = load_database()
+
+    if chat_id not in data["groups"]:
+
+        data["groups"].append(chat_id)
+
+        save_database(data)
+
+
+# ============================================================
+# منوی اصلی
+# ============================================================
+
+def main_menu():
+
+    return (
+        "🏢 بات ساختمان فدک\n\n"
+
+        "درود 👋\n\n"
+
+        "این بات مخصوص ساختمان فدک است.\n\n"
+
+        "📌 امکانات:\n"
+        "💰 مشاهده هزینه‌های ساختمان\n"
+        "💳 مشاهده شماره کارت\n"
+        "🔔 یادآوری‌ها\n\n"
+
+        "برای مشاهده کل هزینه‌های ساختمان:\n"
+        "🔹 هزینه\n\n"
+
+        "دستورات مدیریت:\n"
+        "⚙️ مدیریت"
+    )
+
+
+def admin_menu():
+
+    return (
+        "⚙️ پنل مدیریت ساختمان فدک\n\n"
+
+        "دستورات:\n\n"
+
+        "👤 افزودن ادمین\n"
+        "فرمت:\n"
+        "افزودن ادمین USER_ID\n\n"
+
+        "💳 افزودن شماره کارت\n"
+        "فرمت:\n"
+        "افزودن شماره کارت\n"
+        "عنوان\n"
+        "شماره کارت\n\n"
+
+        "💰 افزودن هزینه\n"
+        "فرمت:\n"
+        "افزودن هزینه\n"
+        "عنوان\n"
+        "مبلغ\n"
+        "توضیحات\n\n"
+
+        "🔔 افزودن یادآوری\n"
+        "فرمت:\n"
+        "افزودن یادآوری\n"
+        "روز\n"
+        "عنوان\n"
+        "متن\n\n"
+
+        "🟢 فعال سازی\n"
+        "🔴 غیرفعال سازی"
     )
 
 
@@ -541,1194 +390,720 @@ def commands_text():
 # START
 # ============================================================
 
-@bot.message_handler(
-    commands=["start"]
+@bot.on_update(
+    filters.private,
+    filters.commands("start")
 )
-def start_handler(message):
+async def start_handler(client, update):
 
-    try:
+    save_user(update)
 
-        add_user(
-            message.from_user.id
+    # اولین /start مالک را ثبت می‌کند
+    register_owner(update)
+
+    data = load_database()
+
+    text = (
+        "🏢 **بات ساختمان فدک**\n\n"
+
+        "درود 👋\n\n"
+
+        "این بات برای ساختمان فدک ساخته شده است.\n\n"
+
+        "💰 برای مشاهده کل هزینه‌های ساختمان:\n"
+        "**هزینه**\n\n"
+
+        "💳 برای مشاهده شماره کارت:\n"
+        "**شماره کارت**\n\n"
+
+        "🔔 یادآوری‌های ساختمان نیز توسط بات ارسال می‌شوند.\n"
+    )
+
+    if data["bot"]["active"]:
+
+        text += "\n🟢 وضعیت: فعال"
+
+    else:
+
+        text += "\n🔴 وضعیت: غیرفعال"
+
+    if is_admin(update):
+
+        text += (
+            "\n\n⚙️ برای ورود به مدیریت:\n"
+            "**مدیریت**"
         )
 
-
-        bot.send_message(
-
-            message.chat.id,
-
-            database[
-                "settings"
-            ].get(
-                "start_message",
-                "درود رفیق 😂🐮"
-            ),
-
-            reply_markup=main_keyboard()
-        )
-
-
-    except Exception as e:
-
-        print(
-            "START ERROR:",
-            repr(e)
-        )
+    await update.reply(text)
 
 
 # ============================================================
-# ADMIN
+# پیام‌های خصوصی
 # ============================================================
 
-@bot.message_handler(
-    commands=["admin"]
-)
-def admin_handler(message):
+@bot.on_update(filters.private)
+async def private_handler(client, update):
 
-    try:
+    save_user(update)
 
-        # فقط PV
-        if message.chat.type != "private":
+    text = get_text(update)
 
-            bot.reply_to(
+    if not text:
+        return
 
-                message,
+    # --------------------------------------------------------
+    # مدیریت
+    # --------------------------------------------------------
 
-                "👤 این دستور رو داخل PV خودم بزن."
+    if text == "مدیریت":
+
+        if not is_admin(update):
+
+            await update.reply(
+                "⛔ شما اجازه دسترسی به پنل مدیریت را ندارید."
             )
 
             return
 
-
-        user_id = message.from_user.id
-
-
-        add_user(
-            user_id
+        await update.reply(
+            admin_menu()
         )
 
+        return
 
-        # بدون نیاز به ID دستی
-        add_admin(
-            user_id
+    # --------------------------------------------------------
+    # فعال سازی
+    # --------------------------------------------------------
+
+    if text == "فعال سازی":
+
+        if not is_admin(update):
+            return
+
+        data = load_database()
+
+        data["bot"]["active"] = True
+
+        save_database(data)
+
+        await update.reply(
+            "🟢 **بات ساختمان فدک فعال شد.**\n\n"
+            "این بات برای ساختمان فدک است.\n\n"
+            "برای مشاهده کل هزینه‌های ساختمان:\n"
+            "**هزینه**"
         )
 
+        return
 
-        bot.send_message(
+    # --------------------------------------------------------
+    # غیرفعال سازی
+    # --------------------------------------------------------
 
-            message.chat.id,
+    if text == "غیرفعال سازی":
 
-            "👑 <b>ادمین فعال شد!</b>\n\n"
+        if not is_admin(update):
+            return
 
-            "دسترسی مدیریت برای این حساب "
-            "با موفقیت فعال شد. 😎🐮\n\n"
+        data = load_database()
 
-            "از منوی زیر استفاده کن:",
+        data["bot"]["active"] = False
 
-            reply_markup=admin_keyboard()
+        save_database(data)
+
+        await update.reply(
+            "🔴 بات ساختمان فدک غیرفعال شد."
         )
 
+        return
 
-    except Exception as e:
+    # --------------------------------------------------------
+    # افزودن ادمین
+    # --------------------------------------------------------
 
-        print(
-            "ADMIN ERROR:",
-            repr(e)
-        )
+    if text.startswith("افزودن ادمین"):
 
+        if not is_owner(update):
 
-# ============================================================
-# ACTIVATE GROUP
-# فقط «فعال»
-# ============================================================
-
-@bot.message_handler(
-    func=lambda message:
-
-        message.chat.type in [
-            "group",
-            "supergroup"
-        ]
-
-        and
-
-        message.text
-
-        and
-
-        message.text.strip().lower()
-        == "فعال"
-)
-def activate_group(message):
-
-    try:
-
-        chat_id = message.chat.id
-
-        user_id = message.from_user.id
-
-
-        # ------------------------------------------
-        # بررسی ادمین گروه
-        # ------------------------------------------
-
-        member = bot.get_chat_member(
-
-            chat_id,
-
-            user_id
-        )
-
-
-        if member.status not in [
-            "administrator",
-            "creator"
-        ]:
-
-            bot.reply_to(
-
-                message,
-
-                "❌ فقط ادمین گروه می‌تواند "
-                "بات را فعال کند."
+            await update.reply(
+                "⛔ فقط مالک اصلی می‌تواند ادمین اضافه کند."
             )
 
             return
 
+        parts = text.split()
 
-        # ------------------------------------------
-        # ذخیره گروه
-        # ------------------------------------------
+        if len(parts) < 3:
 
-        database[
-            "groups"
-        ][
-            str(chat_id)
-        ] = {
-
-            "active": True,
-
-            "owner": user_id,
-
-            "fozool": False,
-
-            "serious": False
-        }
-
-
-        save_db()
-
-
-        # ------------------------------------------
-        # گرفتن ادمین‌های گروه
-        # ------------------------------------------
-
-        admins = bot.get_chat_administrators(
-            chat_id
-        )
-
-
-        admin_lines = []
-
-
-        for admin in admins:
-
-            user = admin.user
-
-
-            name = (
-                user.first_name
-                or
-                "بدون نام"
+            await update.reply(
+                "❌ فرمت صحیح:\n\n"
+                "افزودن ادمین USER_ID"
             )
 
+            return
 
-            if user.username:
+        user_id = parts[2]
 
-                display = (
-                    f"@{user.username}"
+        if add_admin(user_id):
+
+            await update.reply(
+                "✅ ادمین با موفقیت اضافه شد."
+            )
+
+        else:
+
+            await update.reply(
+                "⚠️ این کاربر از قبل ادمین است."
+            )
+
+        return
+
+    # --------------------------------------------------------
+    # افزودن شماره کارت
+    # --------------------------------------------------------
+
+    if text.startswith("افزودن شماره کارت"):
+
+        if not is_admin(update):
+            return
+
+        lines = text.splitlines()
+
+        if len(lines) < 3:
+
+            await update.reply(
+                "❌ فرمت صحیح:\n\n"
+                "افزودن شماره کارت\n"
+                "عنوان\n"
+                "شماره کارت"
+            )
+
+            return
+
+        title = lines[1].strip()
+        card_number = lines[2].strip()
+
+        data = load_database()
+
+        data["bank_cards"].append({
+
+            "title": title,
+
+            "card_number": card_number,
+
+            "created_at":
+                datetime.now().strftime(
+                    "%Y-%m-%d %H:%M:%S"
                 )
+        })
 
-            else:
+        save_database(data)
 
-                display = name
+        await update.reply(
+            "✅ شماره کارت ثبت شد."
+        )
 
+        return
 
-            if admin.status == "creator":
+    # --------------------------------------------------------
+    # شماره کارت
+    # --------------------------------------------------------
 
-                role = "👑 مالک"
+    if text in (
+        "شماره کارت",
+        "شماره کارت ها",
+        "شماره کارت‌ها"
+    ):
 
-            else:
+        data = load_database()
 
-                role = "🛡 ادمین"
+        cards = data.get(
+            "bank_cards",
+            []
+        )
 
+        if not cards:
 
-            admin_lines.append(
-                f"{role} — {display}"
+            await update.reply(
+                "💳 هنوز شماره کارتی ثبت نشده است."
             )
 
+            return
 
-        admins_text = "\n".join(
-            admin_lines
-        )
-
-
-        if not admins_text:
-
-            admins_text = (
-                "ادمین‌ها پیدا نشدن."
-            )
-
-
-        # ------------------------------------------
-        # پیام فعال شدن
-        # ------------------------------------------
-
-        bot.send_message(
-
-            chat_id,
-
-            "🐮 <b>گوخور اضافی فعال شد!</b>\n\n"
-
-            "👑 <b>ادمین‌های این گروه:</b>\n\n"
-
-            f"{admins_text}\n\n"
-
-            "❤️ اینا مالکای منن!\n"
-
-            "ولی من بیشتر "
-            "<b>رادوین</b> "
-            "و <b>ایران</b> رو دوست دارم 🇮🇷😂\n\n"
-
-            "📋 <b>دستورات:</b>\n\n"
-
-            "😈 فضول روشن\n"
-            "😇 فضول خاموش\n\n"
-
-            "🧐 جدی روشن\n"
-            "😂 جدی خاموش\n\n"
-
-            "🤖 گوخور سلام\n\n"
-
-            "یا روی پیام من ریپلای کن.",
-
-            reply_markup=group_keyboard()
-        )
-
-
-    except Exception as e:
-
-        print(
-            "ACTIVATE ERROR:",
-            repr(e)
-        )
-
-
-        bot.reply_to(
-
-            message,
-
-            "❌ هنگام فعال‌سازی خطایی رخ داد."
-        )
-
-
-# ============================================================
-# FOZOOL
-# ============================================================
-
-@bot.message_handler(
-    func=lambda message:
-
-        message.chat.type in [
-            "group",
-            "supergroup"
+        result = [
+            "💳 **شماره کارت‌های ساختمان فدک**\n"
         ]
 
-        and
+        for card in cards:
 
-        message.text
+            result.append(
+                f"🔹 {card['title']}\n"
+                f"💳 `{card['card_number']}`\n"
+            )
 
-        and
+        await update.reply(
+            "\n".join(result)
+        )
 
-        message.text.strip().lower()
-        in [
-            "فضول روشن",
-            "فضول خاموش"
+        return
+
+    # --------------------------------------------------------
+    # افزودن هزینه
+    # --------------------------------------------------------
+
+    if text.startswith("افزودن هزینه"):
+
+        if not is_admin(update):
+            return
+
+        lines = text.splitlines()
+
+        if len(lines) < 3:
+
+            await update.reply(
+                "❌ فرمت صحیح:\n\n"
+                "افزودن هزینه\n"
+                "عنوان\n"
+                "مبلغ\n"
+                "توضیحات"
+            )
+
+            return
+
+        title = lines[1].strip()
+
+        try:
+
+            amount = int(
+                lines[2]
+                .replace(",", "")
+                .replace("٬", "")
+                .replace("تومان", "")
+                .strip()
+            )
+
+        except ValueError:
+
+            await update.reply(
+                "❌ مبلغ واردشده صحیح نیست."
+            )
+
+            return
+
+        description = ""
+
+        if len(lines) >= 4:
+
+            description = "\n".join(
+                lines[3:]
+            ).strip()
+
+        data = load_database()
+
+        data["expenses"].append({
+
+            "title": title,
+
+            "amount": amount,
+
+            "description": description,
+
+            "date":
+                datetime.now().strftime(
+                    "%Y-%m-%d"
+                ),
+
+            "added_by":
+                get_sender_id(update)
+        })
+
+        save_database(data)
+
+        await update.reply(
+            "✅ هزینه با موفقیت ثبت شد."
+        )
+
+        return
+
+    # --------------------------------------------------------
+    # افزودن یادآوری
+    # --------------------------------------------------------
+
+    if text.startswith("افزودن یادآوری"):
+
+        if not is_admin(update):
+            return
+
+        lines = text.splitlines()
+
+        if len(lines) < 4:
+
+            await update.reply(
+                "❌ فرمت صحیح:\n\n"
+                "افزودن یادآوری\n"
+                "روز\n"
+                "عنوان\n"
+                "متن"
+            )
+
+            return
+
+        day = lines[1].strip()
+        title = lines[2].strip()
+
+        reminder_text = "\n".join(
+            lines[3:]
+        ).strip()
+
+        data = load_database()
+
+        data["reminders"].append({
+
+            "day": day,
+
+            "title": title,
+
+            "text": reminder_text,
+
+            "last_sent": None
+        })
+
+        save_database(data)
+
+        await update.reply(
+            f"🔔 یادآوری روز {day} ثبت شد."
+        )
+
+        return
+
+    # --------------------------------------------------------
+    # هزینه
+    # --------------------------------------------------------
+
+    if text in (
+        "هزینه",
+        "هزینه ها",
+        "هزینه‌ها",
+        "هزینه کل"
+    ):
+
+        data = load_database()
+
+        expenses = data.get(
+            "expenses",
+            []
+        )
+
+        if not expenses:
+
+            await update.reply(
+                "🏢 **ساختمان فدک**\n\n"
+                "💰 هنوز هیچ هزینه‌ای ثبت نشده است."
+            )
+
+            return
+
+        total = 0
+
+        result = [
+            "🏢 **ساختمان فدک**\n",
+            "💰 **هزینه‌ها:**\n"
         ]
-)
-def fozool_handler(message):
 
-    try:
+        for expense in expenses:
 
-        chat_id = message.chat.id
-
-        user_id = message.from_user.id
-
-
-        group = database[
-            "groups"
-        ].get(
-            str(chat_id)
-        )
-
-
-        if not group:
-
-            return
-
-
-        if not group.get(
-            "active",
-            False
-        ):
-
-            return
-
-
-        # فقط صاحب فعال‌کننده
-        if user_id != group.get(
-            "owner"
-        ):
-
-            bot.reply_to(
-
-                message,
-
-                "❌ فقط ادمین فعال‌کننده "
-                "می‌تواند این حالت را تغییر دهد."
+            amount = int(
+                expense.get(
+                    "amount",
+                    0
+                )
             )
 
-            return
+            total += amount
 
-
-        command = (
-            message.text
-            .strip()
-            .lower()
-        )
-
-
-        if command == "فضول روشن":
-
-            group[
-                "fozool"
-            ] = True
-
-            save_db()
-
-
-            bot.reply_to(
-
-                message,
-
-                "😈 <b>فضول روشن شد!</b>\n"
-                "از پیام بعدی می‌پرم وسط 😂🐮"
+            result.append(
+                f"🔹 {expense.get('title', '-')}\n"
+                f"💵 {format_money(amount)} تومان\n"
+                f"📅 {expense.get('date', '-')}\n"
             )
 
-            return
-
-
-        if command == "فضول خاموش":
-
-            group[
-                "fozool"
-            ] = False
-
-            save_db()
-
-
-            bot.reply_to(
-
-                message,
-
-                "😇 <b>فضول خاموش شد!</b>\n"
-                "فقط با «گوخور» یا ریپلای جواب می‌دم."
-            )
-
-
-    except Exception as e:
-
-        print(
-            "FOZOOL ERROR:",
-            repr(e)
+        result.append(
+            "━━━━━━━━━━━━\n"
+            f"💰 **کل هزینه‌ها: "
+            f"{format_money(total)} تومان**"
         )
 
-
-# ============================================================
-# SERIOUS
-# ============================================================
-
-@bot.message_handler(
-    func=lambda message:
-
-        message.chat.type in [
-            "group",
-            "supergroup"
-        ]
-
-        and
-
-        message.text
-
-        and
-
-        message.text.strip().lower()
-        in [
-            "جدی روشن",
-            "جدی خاموش"
-        ]
-)
-def serious_handler(message):
-
-    try:
-
-        chat_id = message.chat.id
-
-        user_id = message.from_user.id
-
-
-        group = database[
-            "groups"
-        ].get(
-            str(chat_id)
+        await update.reply(
+            "\n".join(result)
         )
-
-
-        if not group:
-
-            return
-
-
-        if not group.get(
-            "active",
-            False
-        ):
-
-            return
-
-
-        if user_id != group.get(
-            "owner"
-        ):
-
-            bot.reply_to(
-
-                message,
-
-                "❌ فقط ادمین فعال‌کننده "
-                "می‌تواند این حالت را تغییر دهد."
-            )
-
-            return
-
-
-        command = (
-            message.text
-            .strip()
-            .lower()
-        )
-
-
-        if command == "جدی روشن":
-
-            group[
-                "serious"
-            ] = True
-
-            save_db()
-
-
-            bot.reply_to(
-
-                message,
-
-                "🧐 <b>حالت جدی روشن شد!</b>\n"
-                "از پیام بعدی جدی جواب می‌دم."
-            )
-
-            return
-
-
-        if command == "جدی خاموش":
-
-            group[
-                "serious"
-            ] = False
-
-            save_db()
-
-
-            bot.reply_to(
-
-                message,
-
-                "😂 <b>حالت جدی خاموش شد!</b>\n"
-                "گوخور برگشت به حالت شیطونی 🐮"
-            )
-
-
-    except Exception as e:
-
-        print(
-            "SERIOUS ERROR:",
-            repr(e)
-        )
-
-
-# ============================================================
-# ADMINS COMMAND
-# ============================================================
-
-@bot.message_handler(
-    commands=["admins"]
-)
-def admins_command(message):
-
-    if message.chat.type not in [
-        "group",
-        "supergroup"
-    ]:
 
         return
 
 
-    try:
-
-        admins = bot.get_chat_administrators(
-            message.chat.id
-        )
-
-
-        lines = []
-
-
-        for admin in admins:
-
-            user = admin.user
-
-
-            name = (
-                user.first_name
-                or
-                "بدون نام"
-            )
-
-
-            if user.username:
-
-                name += (
-                    f" (@{user.username})"
-                )
-
-
-            if admin.status == "creator":
-
-                role = "👑 مالک"
-
-            else:
-
-                role = "🛡 ادمین"
-
-
-            lines.append(
-                f"{role} — {name}"
-            )
-
-
-        bot.send_message(
-
-            message.chat.id,
-
-            "👑 <b>ادمین‌های گروه:</b>\n\n"
-
-            +
-            "\n".join(lines)
-        )
-
-
-    except Exception as e:
-
-        print(
-            "ADMINS ERROR:",
-            repr(e)
-        )
-
-
-        bot.reply_to(
-
-            message,
-
-            "❌ نتونستم ادمین‌های گروه رو دریافت کنم."
-        )
-
-
 # ============================================================
-# GROUP AI
+# گروه
 # ============================================================
 
-@bot.message_handler(
-    func=lambda message:
+@bot.on_update(filters.group)
+async def group_handler(client, update):
 
-        message.chat.type in [
-            "group",
-            "supergroup"
+    register_group(update)
+
+    text = get_text(update)
+
+    if not text:
+        return
+
+    data = load_database()
+
+    # --------------------------------------------------------
+    # اگر بات غیرفعال باشد
+    # --------------------------------------------------------
+
+    if not data["bot"]["active"]:
+        return
+
+    # --------------------------------------------------------
+    # هزینه
+    # --------------------------------------------------------
+
+    if text in (
+        "هزینه",
+        "هزینه ها",
+        "هزینه‌ها",
+        "هزینه کل",
+        "هزینه های ساختمان",
+        "هزینه‌های ساختمان"
+    ):
+
+        expenses = data.get(
+            "expenses",
+            []
+        )
+
+        if not expenses:
+
+            await update.reply(
+                "🏢 ساختمان فدک\n\n"
+                "💰 هنوز هیچ هزینه‌ای ثبت نشده است."
+            )
+
+            return
+
+        total = 0
+
+        result = [
+            "🏢 **ساختمان فدک**\n",
+            "💰 **گزارش هزینه‌ها**\n"
         ]
 
-        and
+        for expense in expenses:
 
-        bool(message.text)
-)
-def group_ai_handler(message):
+            amount = int(
+                expense.get(
+                    "amount",
+                    0
+                )
+            )
 
-    try:
+            total += amount
 
-        text = (
-            message.text
-            .strip()
+            result.append(
+                f"🔹 {expense.get('title', '-')}\n"
+                f"💵 {format_money(amount)} تومان\n"
+                f"📅 {expense.get('date', '-')}\n"
+            )
+
+        result.append(
+            "━━━━━━━━━━━━\n"
+            f"💰 **کل هزینه‌ها: "
+            f"{format_money(total)} تومان**"
         )
 
+        await update.reply(
+            "\n".join(result)
+        )
 
-        command = text.lower()
+        return
 
+    # --------------------------------------------------------
+    # شماره کارت
+    # --------------------------------------------------------
 
-        # دستورات
-        if command in [
-            "فعال",
-            "فضول روشن",
-            "فضول خاموش",
-            "جدی روشن",
-            "جدی خاموش"
-        ]:
+    if text in (
+        "شماره کارت",
+        "شماره کارت ها",
+        "شماره کارت‌ها"
+    ):
+
+        cards = data.get(
+            "bank_cards",
+            []
+        )
+
+        if not cards:
+
+            await update.reply(
+                "💳 هنوز شماره کارتی ثبت نشده است."
+            )
 
             return
 
+        result = [
+            "💳 **شماره کارت ساختمان فدک**\n"
+        ]
 
-        group = database[
-            "groups"
-        ].get(
-            str(message.chat.id)
-        )
+        for card in cards:
 
-
-        if not group:
-
-            return
-
-
-        if not group.get(
-            "active",
-            False
-        ):
-
-            return
-
-
-        # ------------------------------------------
-        # آیا با «گوخور» صدا زده شده؟
-        # ------------------------------------------
-
-        called = (
-
-            command.startswith(
-                "گوخور"
+            result.append(
+                f"🔹 {card['title']}\n"
+                f"💳 `{card['card_number']}`\n"
             )
 
-            or
-
-            command.startswith(
-                "گو خور"
-            )
+        await update.reply(
+            "\n".join(result)
         )
 
-
-        # ------------------------------------------
-        # آیا روی پیام بات ریپلای شده؟
-        # ------------------------------------------
-
-        replied_to_bot = False
-
-
-        if message.reply_to_message:
-
-            replied = (
-                message.reply_to_message
-            )
-
-
-            if replied.from_user:
-
-                try:
-
-                    me = bot.get_me()
-
-
-                    replied_to_bot = (
-
-                        replied.from_user.id
-                        ==
-                        me.id
-                    )
-
-                except Exception:
-
-                    replied_to_bot = False
-
-
-        # ------------------------------------------
-        # فضول خاموش
-        # ------------------------------------------
-
-        if not group.get(
-            "fozool",
-            False
-        ):
-
-            if not called and not replied_to_bot:
-
-                return
-
-
-        # ------------------------------------------
-        # AI
-        # ------------------------------------------
-
-        answer = ask_ai(
-
-            text,
-
-            serious=group.get(
-                "serious",
-                False
-            )
-        )
-
-
-        bot.reply_to(
-
-            message,
-
-            answer
-        )
-
-
-    except Exception as e:
-
-        print(
-            "GROUP AI ERROR:",
-            repr(e)
-        )
+        return
 
 
 # ============================================================
-# CALLBACK BUTTONS
+# سیستم یادآوری
 # ============================================================
 
-@bot.callback_query_handler(
-    func=lambda call: True
-)
-def callback_handler(call):
+async def reminder_loop():
 
-    try:
+    while True:
 
-        data = call.data
+        try:
 
-        chat_id = call.message.chat.id
+            data = load_database()
 
-        user_id = call.from_user.id
+            if not data["bot"]["active"]:
 
+                await asyncio.sleep(60)
 
-        # ====================================================
-        # COMMANDS
-        # ====================================================
+                continue
 
-        if data == "commands":
+            now = datetime.now()
 
-            bot.answer_callback_query(
-                call.id
+            current_day = str(
+                now.day
             )
 
-
-            bot.send_message(
-
-                chat_id,
-
-                commands_text()
+            today = now.strftime(
+                "%Y-%m-%d"
             )
 
-            return
+            changed = False
 
-
-        # ====================================================
-        # CHAT
-        # ====================================================
-
-        if data == "chat":
-
-            bot.answer_callback_query(
-
-                call.id,
-
-                "حاضرم 😂🐮"
-            )
-
-
-            bot.send_message(
-
-                chat_id,
-
-                "درود 😂🐮\n\n"
-                "پیامت رو بفرست.\n"
-                "من حاضرم."
-            )
-
-            return
-
-
-        # ====================================================
-        # SUPPORT
-        # ====================================================
-
-        if data == "support":
-
-            bot.answer_callback_query(
-                call.id
-            )
-
-
-            bot.send_message(
-
-                chat_id,
-
-                "📞 <b>پشتیبانی</b>\n\n"
-                "پیامت رو همینجا بفرست."
-            )
-
-            return
-
-
-        # ====================================================
-        # PRODUCTS
-        # ====================================================
-
-        if data == "products":
-
-            bot.answer_callback_query(
-                call.id
-            )
-
-
-            bot.send_message(
-
-                chat_id,
-
-                "📦 <b>محصولات</b>\n\n"
-                "فعلاً محصولی ثبت نشده."
-            )
-
-            return
-
-
-        # ====================================================
-        # SETTINGS
-        # ====================================================
-
-        if data == "settings":
-
-            bot.answer_callback_query(
-                call.id
-            )
-
-
-            if is_admin(
-                user_id
+            for reminder in data.get(
+                "reminders",
+                []
             ):
 
-                bot.send_message(
+                if str(
+                    reminder.get("day")
+                ) != current_day:
 
-                    chat_id,
+                    continue
 
-                    "⚙️ <b>تنظیمات مدیریت</b>\n\n"
+                if reminder.get(
+                    "last_sent"
+                ) == today:
 
-                    "👑 شما ادمین اصلی "
-                    "voidchater هستید.\n\n"
+                    continue
 
-                    "برای مدیریت از دستورات "
-                    "ادمین استفاده کن."
+                message = (
+                    "🔔 **یادآوری ساختمان فدک**\n\n"
+                    f"📌 {reminder.get('title', '')}\n\n"
+                    f"{reminder.get('text', '')}"
                 )
 
-            else:
+                # ارسال به تمام گروه‌هایی که
+                # بات در آن‌ها پیام دیده است
+                for chat_id in data.get(
+                    "groups",
+                    []
+                ):
 
-                bot.send_message(
+                    try:
 
-                    chat_id,
+                        await bot.send_message(
+                            chat_id,
+                            message
+                        )
 
-                    "⚙️ تنظیمات مخصوص ادمین‌هاست."
-                )
+                    except Exception as error:
 
-            return
+                        print(
+                            f"Reminder error: {error}"
+                        )
 
+                reminder["last_sent"] = today
 
-        # ====================================================
-        # ADMIN STATUS
-        # ====================================================
+                changed = True
 
-        if data == "admin_status":
+            if changed:
 
-            bot.answer_callback_query(
-                call.id
+                save_database(data)
+
+        except Exception as error:
+
+            print(
+                f"Reminder loop error: {error}"
             )
 
-
-            if is_admin(
-                user_id
-            ):
-
-                text = (
-                    "👑 <b>وضعیت:</b>\n\n"
-                    "شما ادمین اصلی "
-                    "voidchater هستید. 😎"
-                )
-
-            else:
-
-                text = (
-                    "👤 شما ادمین اصلی نیستید."
-                )
-
-
-            bot.send_message(
-                chat_id,
-                text
-            )
-
-            return
-
-
-        # ====================================================
-        # FOZOOL STATUS
-        # ====================================================
-
-        if data == "fozool_status":
-
-            bot.answer_callback_query(
-                call.id
-            )
-
-
-            group = database[
-                "groups"
-            ].get(
-                str(chat_id)
-            )
-
-
-            if not group:
-
-                text = (
-                    "❌ بات هنوز در این گروه فعال نشده."
-                )
-
-            else:
-
-                status = (
-
-                    "روشن 😈"
-
-                    if group.get(
-                        "fozool",
-                        False
-                    )
-
-                    else
-
-                    "خاموش 😇"
-                )
-
-
-                text = (
-                    "😈 <b>حالت فضول:</b> "
-                    + status
-                )
-
-
-            bot.send_message(
-                chat_id,
-                text
-            )
-
-            return
-
-
-        # ====================================================
-        # SERIOUS STATUS
-        # ====================================================
-
-        if data == "serious_status":
-
-            bot.answer_callback_query(
-                call.id
-            )
-
-
-            group = database[
-                "groups"
-            ].get(
-                str(chat_id)
-            )
-
-
-            if not group:
-
-                text = (
-                    "❌ بات هنوز در این گروه فعال نشده."
-                )
-
-            else:
-
-                status = (
-
-                    "روشن 🧐"
-
-                    if group.get(
-                        "serious",
-                        False
-                    )
-
-                    else
-
-                    "خاموش 😂"
-                )
-
-
-                text = (
-                    "🧐 <b>حالت جدی:</b> "
-                    + status
-                )
-
-
-            bot.send_message(
-                chat_id,
-                text
-            )
-
-            return
-
-
-    except Exception as e:
-
-        print(
-            "CALLBACK ERROR:",
-            repr(e)
-        )
+        await asyncio.sleep(60)
 
 
 # ============================================================
-# BOT ADDED TO GROUP
+# اجرای بات
 # ============================================================
 
-@bot.message_handler(
-    content_types=[
-        "new_chat_members"
-    ]
-)
-def new_member_handler(message):
+async def main():
 
-    try:
-
-        me = bot.get_me()
-
-
-        for user in message.new_chat_members:
-
-            if user.id == me.id:
-
-                bot.send_message(
-
-                    message.chat.id,
-
-                    "درود 😂🐮\n\n"
-
-                    "من <b>voidchater</b> هستم.\n\n"
-
-                    "برای فعال کردن من در این گروه، "
-                    "یک ادمین بنویسه:\n\n"
-
-                    "<code>فعال</code>\n\n"
-
-                    "😎🐮"
-                )
-
-
-    except Exception as e:
-
-        print(
-            "NEW MEMBER ERROR:",
-            repr(e)
-        )
-
-
-# ============================================================
-# STARTUP
-# ============================================================
-
-try:
-
-    me = bot.get_me()
-
+    create_database()
 
     print()
-    print("=" * 50)
-    print("🐮 voidchater ONLINE")
-    print("🤖 Username:", me.username)
-    print("🧠 Model:", AI_MODEL)
-    print("💾 Database:", DB_FILE)
-    print("=" * 50)
+    print("====================================")
+    print("       🏢 ساختمان فدک")
+    print("====================================")
+    print("🟢 Bot starting...")
+    print("📁 database.json checked")
+    print("====================================")
     print()
 
-
-except Exception as e:
-
-    print(
-        "BOT CONNECTION ERROR:",
-        repr(e)
+    reminder_task = asyncio.create_task(
+        reminder_loop()
     )
 
-
-# ============================================================
-# POLLING
-# ============================================================
-
-while True:
-
     try:
 
-        print(
-            "🚀 Polling started..."
-        )
+        await bot.run()
 
-
-        bot.infinity_polling(
-
-            skip_pending=True,
-
-            allowed_updates=[
-                "message",
-                "callback_query"
-            ]
-        )
-
-
-    except Exception as e:
+    except KeyboardInterrupt:
 
         print(
-            "POLLING ERROR:",
-            repr(e)
+            "\n🔴 Bot stopped."
         )
 
+    finally:
 
-        print(
-            "⏳ Reconnecting in 5 seconds..."
-        )
+        reminder_task.cancel()
+
+        try:
+
+            await reminder_task
+
+        except asyncio.CancelledError:
+
+            pass
 
 
-        time.sleep(5)
+# ============================================================
+# Start
+# ============================================================
+
+if __name__ == "__main__":
+
+    asyncio.run(main())
