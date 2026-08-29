@@ -9,7 +9,7 @@ from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
 # تنظیمات
 # =========================
 
-TOKEN = "8812578287:AAFMraFuu6XY1bX88DLOL5qUIbSD2GmDbVA"
+TOKEN = "8812578287:AAFuMCUsli9AkNELOUKKltW9uiYlB3HSoXY"
 
 bot = telebot.TeleBot(TOKEN, parse_mode="HTML")
 
